@@ -1,85 +1,465 @@
 # MM/GBSA Rescoring Tool
 
-A minimal Python package for MM/GBSA rescoring of protein-ligand complexes using **AmberTools only**.
+A streamlined Python package for MM/GBSA single-frame rescoring of protein-ligand complexes using **AmberTools MMPBSA.py**.
 
-## Features
+## 🎯 Scientific Positioning
 
-- **Protein force field**: ff14SB
-- **Ligand force field**: GAFF2
-- **Charges**: AM1-BCC
-- **MM/GBSA**: Single-structure or small ensemble, no entropy
+**This tool is designed for POST-DOCKING RESCORING and RELATIVE RANKING only:**
+- ✅ Rank docked poses or compound series
+- ✅ Prioritize compounds for synthesis/testing
+- ✅ Compare binding modes qualitatively
+- ❌ NOT for absolute binding free energies
+- ❌ NOT for publication-quality ΔG values
+- ❌ NOT a replacement for rigorous alchemical methods
 
-## Limitations
+The MM/GBSA scores provide **relative binding strength** for comparison within a series, not thermodynamically rigorous free energies.
 
-This tool is designed for **relative ranking only**:
-- ❌ No absolute binding free energies
-- ❌ No support for metals
-- ❌ No support for covalent ligands
-- ❌ No support for multiple ligands
-- ❌ No support for missing heavy atoms
+## ✨ Features
 
-## Installation
+### Core Capabilities
+- **Single-frame MM/GBSA** rescoring using AmberTools MMPBSA.py
+- **Integrated pipeline** from PDB → parameters → complex → scores
+- **Batch processing** for multiple ligands against one receptor
+- **Automated parameterization** with GAFF2 + AM1-BCC charges
+- **Protein preparation** with pdb4amber + ff14SB force field
+- **Structure validation** with chemistry checks
+
+### Force Fields & Methods
+- **Protein**: AMBER ff14SB
+- **Ligand**: GAFF2 (General Amber Force Field 2)
+- **Charges**: AM1-BCC (semi-empirical quantum mechanics)
+- **Solvation**: Generalized Born (GB) implicit solvent (igb=5, OBC II)
+- **Salt**: 0.15 M (physiological)
+
+## 🚫 Limitations
+
+- ❌ No absolute binding free energies (relative ranking only)
+- ❌ No entropy calculations (single-frame, no conformational sampling)
+- ❌ No explicit solvent (GB implicit solvent only)
+- ❌ No metal cofactors support
+- ❌ No covalent ligands
+- ❌ No multi-ligand complexes
+- ❌ Ligands must be complete (no missing heavy atoms)
+- ❌ Requires pre-docked complex or separate ligand MOL2
+
+## 📋 Requirements
+
+- **AmberTools** 24.8+ (provides MMPBSA.py, antechamber, parmchk2, tleap, pdb4amber)
+- **Python** 3.10+
+- **BioPython** 1.86+
+- **Typer** 0.21.1+ (CLI framework)
+- **Rich** 13.7.1+ (colored output)
+- **Loguru** 0.7.3+ (logging)
+
+## 🔧 Installation
 
 ```bash
-# Activate the mmgbsa-dev environment
+# Create conda environment with AmberTools
+conda env create -f environment.yml
 conda activate mmgbsa-dev
 
-# Install in development mode
+# Install package in development mode
 pip install -e .
+
+# Verify installation
+mmgbsa --version
 ```
 
-## Usage
+## 📖 Usage
 
-### Validate a structure
+### Command Overview
+
+```bash
+mmgbsa --help
+```
+
+Available commands:
+- `validate` - Validate protein-ligand complex structure
+- `prep-protein` - Prepare receptor with pdb4amber + tleap
+- `parameterize` - Parameterize ligand with GAFF2 + AM1-BCC
+- `assemble` - Assemble protein-ligand complex topology
+- `run` - Run MM/GBSA rescoring on assembled complex
+- `integrate` - End-to-end pipeline (all steps in one command)
+- `batch` - Batch rescoring for multiple ligands vs one receptor
+
+---
+
+### 1️⃣ Validate Structure
+
+Check if protein-ligand complex is suitable for MM/GBSA:
 
 ```bash
 mmgbsa validate complex.pdb --ligand LIG
 ```
 
-### Run MM/GBSA rescoring (not yet implemented)
+**Checks performed:**
+- Structure parsing (valid PDB format)
+- Ligand presence (at least one ligand molecule)
+- Protein presence (at least one protein chain)
+- Chemistry validation (ligand has bond information if from MOL2)
+
+---
+
+### 2️⃣ Prepare Protein
+
+Process receptor PDB with pdb4amber and generate topology:
 
 ```bash
-mmgbsa rescore complex.pdb --ligand LIG --output results/
+mmgbsa prep-protein receptor.pdb -o protein_params/
 ```
 
-## Development
+**Output:**
+- `protein_params/protein.prmtop` - AMBER topology file
+- `protein_params/protein.inpcrd` - Coordinates
+- `protein_params/receptor_processed.pdb` - Cleaned PDB
+
+**Options:**
+- `--skip-pdb4amber` - Skip pdb4amber cleaning (use if already prepared)
+
+---
+
+### 3️⃣ Parameterize Ligand
+
+Generate GAFF2 parameters and AM1-BCC charges:
 
 ```bash
-# Run tests
+mmgbsa parameterize ligand.mol2 -o ligand_params/
+```
+
+**Requirements:**
+- Ligand must be in **MOL2 or SDF format** (with bond information)
+- All heavy atoms must be present
+- 3D coordinates required
+
+**Output:**
+- `ligand_params/ligand.mol2` - Parameterized ligand
+- `ligand_params/ligand.frcmod` - GAFF2 force field modifications
+- `ligand_params/ligand.pdb` - Converted structure
+
+**Options:**
+- `--net-charge INT` - Specify net charge (auto-detected if not provided)
+
+---
+
+### 4️⃣ Assemble Complex
+
+Combine protein and ligand topologies:
+
+```bash
+mmgbsa assemble \
+  --protein protein_params/ \
+  --ligand ligand_params/ \
+  -o complex_params/
+```
+
+**Output:**
+- `complex_params/complex.prmtop` - Combined topology
+- `complex_params/complex.inpcrd` - Combined coordinates
+- `complex_params/protein.pdb` - Protein structure (for tleap)
+- `complex_params/tleap_complex.in` - Tleap input script
+
+---
+
+### 5️⃣ Run MM/GBSA
+
+Execute single-frame MM/GBSA rescoring:
+
+```bash
+mmgbsa run complex_params/ -o mmgbsa_results/
+```
+
+**Output:**
+- `mmgbsa_results/mmgbsa_output.dat` - Energy components
+- `mmgbsa_results/mmgbsa.in` - MMPBSA.py input
+- `mmgbsa_results/mmgbsa.log` - Detailed log
+- `mmgbsa_results/ligand.prmtop` - Ligand topology (generated)
+
+**Energy components:**
+- **ΔG_bind** - Total binding energy (DELTA TOTAL)
+- **ΔH** - Enthalpy contribution (DELTA G gas)
+- **ΔG_GB** - Polar solvation energy (DELTA G solv)
+
+---
+
+### 6️⃣ Integrated Pipeline
+
+Run all steps in one command:
+
+```bash
+mmgbsa integrate \
+  --receptor receptor.pdb \
+  --ligand ligand.mol2 \
+  -o pipeline_output/
+```
+
+**Workflow:**
+1. Prepare protein (pdb4amber + tleap)
+2. Parameterize ligand (GAFF2 + AM1-BCC)
+3. Assemble complex (tleap combine)
+4. Validate assembled complex (optional)
+5. Run MM/GBSA rescoring
+
+**Output structure:**
+```
+pipeline_output/
+├── protein/         # Receptor parameters
+├── ligand/          # Ligand parameters
+├── complex/         # Combined topology
+└── mmgbsa/          # Rescoring results
+```
+
+**Options:**
+- `--skip-validation` - Skip structure validation step
+- `--skip-pdb4amber` - Skip pdb4amber processing
+
+---
+
+### 7️⃣ Batch Processing
+
+Rescore multiple ligands against one receptor:
+
+```bash
+mmgbsa batch \
+  --receptor receptor.pdb \
+  --ligands ligands_directory/ \
+  -o batch_results/
+```
+
+**Features:**
+- Prepares receptor **once** (topology reused for all ligands)
+- Processes ligands in parallel-safe workflow
+- Validates receptor integrity throughout (hash checking)
+- Outputs CSV with all results for easy analysis
+
+**Output:**
+```
+batch_results/
+├── receptor/                    # Prepared once
+├── ligands/                     # Per-ligand subdirectories
+│   ├── compound_1/
+│   │   ├── ligand/
+│   │   ├── complex/
+│   │   └── mmgbsa/
+│   ├── compound_2/
+│   └── ...
+└── mmgbsa_batch_results.csv    # Summary table
+```
+
+**CSV format:**
+```csv
+ligand_name,delta_g_bind,delta_h,delta_g_gb,status
+compound_1,-8.45,-52.34,43.89,success
+compound_2,-6.78,-48.12,41.34,success
+```
+
+**Requirements:**
+- All ligands must be in **MOL2 format**
+- Ligands should be pre-docked or have coordinates
+- Chemistry consistency enforced (same force field for all)
+
+---
+
+## 📊 Interpreting Results
+
+### Energy Components
+
+From `mmgbsa_output.dat`:
+
+```
+DELTA TOTAL    -6.79    # ΔG_bind: Total binding score
+DELTA G gas   -49.75    # ΔH: Gas-phase enthalpy
+DELTA G solv   42.96    # ΔG_GB: Solvation penalty
+```
+
+### Interpretation Guidelines
+
+✅ **What you CAN do:**
+- Rank compounds within a series (more negative = more favorable)
+- Compare docking poses for the same ligand
+- Identify top candidates for experimental validation
+- Detect outliers or problematic structures
+
+❌ **What you CANNOT do:**
+- Report absolute ΔG values in publications
+- Compare results across different receptors
+- Predict experimental Ki/Kd values directly
+- Use for QSAR model training without validation
+
+### Typical Values
+
+- **Strong binders:** -10 to -15 kcal/mol
+- **Moderate binders:** -5 to -10 kcal/mol
+- **Weak binders:** 0 to -5 kcal/mol
+- **Non-binders:** > 0 kcal/mol
+
+**Note:** These are RELATIVE scores, not experimental affinities!
+
+---
+
+## 🔬 Scientific Background
+
+### MM/GBSA Method
+
+MM/GBSA (Molecular Mechanics - Generalized Born Surface Area) estimates binding free energies by:
+
+```
+ΔG_bind = ΔH - TΔS
+        ≈ ΔE_MM + ΔG_solv - TΔS
+```
+
+Where:
+- **ΔE_MM** = Gas-phase molecular mechanics energy (AMBER ff14SB + GAFF2)
+- **ΔG_solv** = Solvation free energy (GB implicit solvent)
+- **TΔS** = Entropy (NOT calculated in single-frame mode)
+
+### Why Single-Frame?
+
+This tool uses **single-frame rescoring** (one structure per complex):
+- ✅ Fast (seconds per complex)
+- ✅ Suitable for post-docking ranking
+- ✅ Consistent with docking pose selection
+- ❌ No conformational sampling
+- ❌ No entropy calculation
+- ❌ High sensitivity to input structure quality
+
+### Comparison to Alternatives
+
+| Method | Speed | Accuracy | Use Case |
+|--------|-------|----------|----------|
+| **MM/GBSA (this tool)** | Fast | Low-Medium | Post-docking ranking |
+| **MM/PBSA** | Medium | Medium | Better solvation model |
+| **FEP/TI** | Slow | High | Rigorous ΔG calculations |
+| **Docking scores** | Very Fast | Low | Initial screening |
+
+---
+
+## ⚠️ Important Warnings
+
+### Critical Reminders
+
+1. **NOT thermodynamically rigorous** - These are approximations for ranking, not absolute free energies
+
+2. **Single-frame limitations** - No conformational sampling means results depend heavily on input structure quality
+
+3. **No entropy** - Binding entropy is NOT calculated, introducing systematic error
+
+4. **Implicit solvent** - GB model approximates solvation, missing explicit water effects
+
+5. **Force field dependence** - Results depend on AMBER ff14SB + GAFF2 parameterization quality
+
+### Common Pitfalls
+
+- ❌ Using different receptors/conditions between compounds
+- ❌ Comparing results to experimental ΔG directly
+- ❌ Over-interpreting small differences (< 1 kcal/mol)
+- ❌ Ignoring structure validation failures
+- ❌ Using PDB ligands without bond information
+
+### Best Practices
+
+- ✅ Always validate structures before rescoring
+- ✅ Use consistent docking protocol for all ligands
+- ✅ Check for clashes or unusual geometries
+- ✅ Compare within series, not across receptors
+- ✅ Treat scores as relative rankings, not predictions
+- ✅ Validate top hits experimentally
+
+---
+
+## 🐛 Troubleshooting
+
+### Common Issues
+
+**Issue:** `ambpdb failed to convert protein coordinates`
+- **Cause:** Spaces in directory paths
+- **Solution:** Avoid spaces in file/directory names, or use relative paths
+
+**Issue:** `No ligand molecules detected in structure`
+- **Cause:** Validation expects ligand in complex PDB
+- **Solution:** Use `--skip-validation` for integrate/batch commands, or provide complex PDB
+
+**Issue:** `Only MOL2 ligands are accepted for batch processing`
+- **Cause:** Batch mode requires consistent chemistry (GAFF2)
+- **Solution:** Convert ligands to MOL2 format with bond information
+
+**Issue:** `MMPBSA.py requires separate receptor and ligand topologies`
+- **Cause:** Directory structure doesn't match expected layout
+- **Solution:** Follow output structure conventions (protein/, ligand/, complex/ subdirs)
+
+**Issue:** `ligand.mol2 missing or invalid`
+- **Cause:** Ligand parameterization failed or file corrupted
+- **Solution:** Check antechamber logs, ensure ligand has complete chemistry
+
+---
+
+## 📁 Output File Descriptions
+
+### Topology Files (.prmtop)
+AMBER topology files containing atom types, charges, bonds, angles, dihedrals
+
+### Coordinate Files (.inpcrd)
+AMBER coordinate files with 3D positions (Å)
+
+### Force Field Modifications (.frcmod)
+GAFF2 parameter additions for ligand-specific atom types
+
+### MM/GBSA Results (.dat)
+Energy component table with ΔG_bind, ΔH, ΔG_GB values
+
+### Tleap Scripts (.in)
+Input scripts for tleap topology generation (for reproducibility)
+
+### Logs (.log)
+Detailed execution logs from AmberTools programs
+
+---
+
+## 🧪 Testing
+
+```bash
+# Run all tests
 pytest tests/
 
-# Format code
-black src/ tests/
-isort src/ tests/
+# Run with coverage
+pytest tests/ --cov=mmgbsa --cov-report=html
 
-# Type checking
-mypy src/
+# Run specific test
+pytest tests/test_validation.py
 ```
 
-## Requirements
+---
 
-- Python 3.10+
-- AmberTools 24+ (must be available in PATH)
-- Conda environment: `mmgbsa-dev`
+## 📚 References
 
-## Project Structure
+### AmberTools
+- **AMBER Force Fields:** Case et al., J. Comput. Chem. (2005)
+- **GAFF:** Wang et al., J. Comput. Chem. (2004)
+- **AM1-BCC:** Jakalian et al., J. Comput. Chem. (2002)
+- **MM/PBSA:** Kollman et al., Acc. Chem. Res. (2000)
 
-```
-mmgbsa/
-├── pyproject.toml          # Modern Python packaging config
-├── README.md
-├── src/mmgbsa/
-│   ├── __init__.py         # Package initialization
-│   ├── cli.py              # Typer-based CLI
-│   ├── config.py           # Configuration constants
-│   └── validation/
-│       ├── __init__.py
-│       ├── pdb_checks.py   # PDB validation logic
-│       └── errors.py       # Custom exceptions
-└── tests/
-    └── test_validation.py  # Validation tests
-```
+### Recommended Reading
+- Genheden & Ryde, *Expert Opin. Drug Discov.* (2015) - MM/PBSA review
+- Wang et al., *Front. Mol. Biosci.* (2019) - End-point free energy methods
+- Miller et al., *J. Chem. Theory Comput.* (2012) - MMPBSA.py tool
 
-## License
+---
 
-MIT
+## 📄 License
+
+This project uses AmberTools, which is distributed under GNU GPL v3.
+
+---
+
+## Acknowledgments
+
+- **AmberTools** developers for MMPBSA.py and force field infrastructure
+- **BioPython** team for PDB parsing tools
+- **Typer/Rich** for modern CLI development
+
+---
+
+## 📮 Contact
+
+For bug reports, feature requests, or questions about usage, please open an issue on GitHub.
+
+**Remember:** This tool is for **relative ranking only**. Always validate top hits experimentally!
