@@ -1,15 +1,5 @@
 README.md
 pyproject.toml
-src/mmgbsa/batch.py
-src/mmgbsa/cli.py
-src/mmgbsa/config.py
-src/mmgbsa/calculation/mmgbsa.py
-src/mmgbsa/parameterization/complex.py
-src/mmgbsa/parameterization/connectivity.py
-src/mmgbsa/parameterization/ligand.py
-src/mmgbsa/parameterization/protein.py
-src/mmgbsa/validation/__init__.py
-src/mmgbsa/validation/pdb_checks.py
 src/rescore/__init__.py
 src/rescore/batch.py
 src/rescore/cli.py
