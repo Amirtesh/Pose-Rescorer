@@ -16,6 +16,7 @@ The philosophy is strict separation of concerns:
 This ensures reproducible, deterministic complex preparation.
 """
 
+import os
 import re
 import subprocess
 from pathlib import Path
@@ -255,6 +256,7 @@ def assemble_complex(
     ligand_mol2: Path,
     ligand_frcmod: Path,
     output_dir: Path,
+    protein_pdb: Path = None,
 ) -> None:
     """
     Assemble protein-ligand complex using tleap.
@@ -265,7 +267,8 @@ def assemble_complex(
     - Ligand coordinates from MOL2
     
     Note: We use ambpdb to convert protein coordinates back to PDB format
-    so tleap can reload and combine with ligand.
+    so tleap can reload and combine with ligand. If protein_pdb is provided,
+    we use that instead of converting.
     
     No solvation, minimization, or MD is performed.
     
@@ -275,6 +278,7 @@ def assemble_complex(
         ligand_mol2: Ligand MOL2 with coordinates
         ligand_frcmod: Ligand force field modifications
         output_dir: Directory for output files
+        protein_pdb: Optional pre-generated protein PDB (for batch mode)
         
     Raises:
         ComplexAssemblyError: If tleap fails
@@ -283,31 +287,54 @@ def assemble_complex(
     
     output_dir.mkdir(parents=True, exist_ok=True)
     
-    # Step 1: Convert protein inpcrd to PDB using ambpdb
-    protein_pdb = output_dir / "protein.pdb"
-    logger.info("Converting protein coordinates to PDB format...")
+    # Step 1: Get protein PDB (use provided or convert from topology)
+    output_protein_pdb = output_dir / "protein.pdb"
     
-    try:
-        with open(protein_pdb, "w") as pdb_out:
-            result = subprocess.run(
-                ["ambpdb", "-p", str(protein_prmtop), "-c", str(protein_inpcrd)],
-                stdout=pdb_out,
-                stderr=subprocess.PIPE,
-                text=True,
-                check=False,
-            )
+    if protein_pdb is not None and protein_pdb.exists():
+        # Copy provided PDB to output directory
+        logger.info(f"Using pre-generated protein PDB: {protein_pdb}")
+        import shutil
+        shutil.copy2(protein_pdb, output_protein_pdb)
+        logger.success(f"Protein PDB copied: {output_protein_pdb}")
+    else:
+        # Convert protein inpcrd to PDB using ambpdb
+        logger.info("Converting protein coordinates to PDB format...")
         
-        if result.returncode != 0 or not protein_pdb.exists():
+        try:
+            # Run ambpdb from a common parent directory to avoid spaces in paths
+            # Find common parent and use relative paths
+            try:
+                common_parent = Path(os.path.commonpath([protein_prmtop, protein_inpcrd, output_dir]))
+                rel_prmtop = protein_prmtop.relative_to(common_parent)
+                rel_inpcrd = protein_inpcrd.relative_to(common_parent)
+                run_dir = common_parent
+            except (ValueError, OSError):
+                # If no common path (different drives on Windows), use absolute paths
+                rel_prmtop = protein_prmtop
+                rel_inpcrd = protein_inpcrd
+                run_dir = Path.cwd()
+            
+            with open(output_protein_pdb, "w") as pdb_out:
+                result = subprocess.run(
+                    ["ambpdb", "-p", str(rel_prmtop), "-c", str(rel_inpcrd)],
+                    stdout=pdb_out,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                    check=False,
+                    cwd=str(run_dir),
+                )
+            
+            if result.returncode != 0 or not output_protein_pdb.exists():
+                raise ComplexAssemblyError(
+                    f"ambpdb failed to convert protein coordinates:\n{result.stderr}"
+                )
+            
+            logger.success(f"Protein PDB generated: {output_protein_pdb}")
+            
+        except FileNotFoundError:
             raise ComplexAssemblyError(
-                f"ambpdb failed to convert protein coordinates:\n{result.stderr}"
+                "ambpdb command not found. Ensure AmberTools is properly installed."
             )
-        
-        logger.success(f"Protein PDB generated: {protein_pdb}")
-        
-    except FileNotFoundError:
-        raise ComplexAssemblyError(
-            "ambpdb command not found. Ensure AmberTools is properly installed."
-        )
     
     # Step 2: Generate tleap input script
     tleap_input = output_dir / "tleap_complex.in"
@@ -415,6 +442,7 @@ def prepare_complex(
     protein_dir: Path,
     ligand_dir: Path,
     output_dir: Path,
+    protein_pdb: Path = None,
 ) -> None:
     """
     Prepare protein-ligand complex for MM/GBSA calculation.
@@ -430,6 +458,7 @@ def prepare_complex(
         protein_dir: Directory containing protein.prmtop and protein.inpcrd
         ligand_dir: Directory containing ligand.mol2 and ligand.frcmod
         output_dir: Directory for output files
+        protein_pdb: Optional pre-generated protein PDB (for batch mode)
         
     Raises:
         ComplexAssemblyError: If any step fails
@@ -444,6 +473,13 @@ def prepare_complex(
     protein_inpcrd = protein_dir / "protein.inpcrd"
     ligand_mol2 = ligand_dir / "ligand.mol2"
     ligand_frcmod = ligand_dir / "ligand.frcmod"
+    
+    # Check for pre-generated protein PDB in protein_dir if not explicitly provided
+    if protein_pdb is None:
+        potential_pdb = protein_dir / "protein.pdb"
+        if potential_pdb.exists():
+            protein_pdb = potential_pdb
+            logger.info(f"Found pre-generated protein PDB: {protein_pdb}")
     
     if not protein_prmtop.exists():
         raise ComplexAssemblyError(
@@ -480,6 +516,7 @@ def prepare_complex(
         ligand_mol2,
         ligand_frcmod,
         output_dir,
+        protein_pdb=protein_pdb,
     )
     
     logger.success("Complex preparation complete")

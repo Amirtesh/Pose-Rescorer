@@ -1,6 +1,7 @@
 README.md
 pyproject.toml
 src/mmgbsa/__init__.py
+src/mmgbsa/batch.py
 src/mmgbsa/cli.py
 src/mmgbsa/config.py
 src/mmgbsa.egg-info/PKG-INFO

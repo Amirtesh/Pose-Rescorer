@@ -33,6 +33,10 @@ from mmgbsa.calculation import (
     run_mmgbsa,
     MMGBSACalculationError,
 )
+from mmgbsa.batch import (
+    run_batch_mmgbsa,
+    BatchError,
+)
 
 app = typer.Typer(
     name="mmgbsa",
@@ -978,3 +982,112 @@ def integrate(
         raise typer.Exit(code=1)
 
 
+@app.command()
+def batch(
+    receptor: Path = typer.Option(
+        ...,
+        "--receptor",
+        "-r",
+        help="Receptor PDB file",
+        exists=True,
+        file_okay=True,
+        dir_okay=False,
+        resolve_path=True,
+    ),
+    ligands: Path = typer.Option(
+        ...,
+        "--ligands",
+        "-l",
+        help="Directory containing MOL2 files or single MOL2 file",
+        exists=True,
+        resolve_path=True,
+    ),
+    output_dir: Path = typer.Option(
+        ...,
+        "-o",
+        "--output",
+        help="Output directory for batch results",
+        resolve_path=True,
+    ),
+    skip_pdb4amber: bool = typer.Option(
+        False,
+        "--skip-pdb4amber",
+        help="Skip pdb4amber processing (use if receptor already prepared)",
+    ),
+) -> None:
+    """
+    Batch MM/GBSA rescoring for multiple ligands against one receptor.
+    
+    This command is a PURE ORCHESTRATOR for high-throughput rescoring:
+    
+    \b
+    - Prepares receptor once (topology reused for all ligands)
+    - Processes each ligand: parameterize → assemble → rescore
+    - Validates receptor integrity throughout (hash checking)
+    - Outputs CSV with all results for relative ranking
+    
+    \b
+    CRITICAL GUARDRAILS:
+    - Only MOL2 ligands accepted (consistent chemistry)
+    - Receptor topology must not change during batch
+    - Results are for RELATIVE RANKING ONLY
+    
+    \b
+    Example:
+        mmgbsa batch -r protein.pdb -l ligands/ -o batch_results/
+    
+    \b
+    Output structure:
+        batch_results/
+        ├── receptor/              (prepared once)
+        ├── ligands/               (per-ligand subdirs)
+        │   ├── ligand1/
+        │   │   ├── ligand/
+        │   │   ├── complex/
+        │   │   └── mmgbsa/
+        │   └── ligand2/
+        │       └── ...
+        └── mmgbsa_batch_results.csv
+    """
+    logger.remove()  # Remove default handler
+    logger.add(
+        lambda msg: None,  # Suppress loguru output (use Rich for user messages)
+        level="INFO"
+    )
+    
+    console.print()
+    console.print(
+        Panel.fit(
+            f"[bold]MM/GBSA Batch Rescoring[/bold]\n"
+            f"Receptor: {receptor.name}\n"
+            f"Ligands: {ligands}\n"
+            f"Output: {output_dir}/\n"
+            f"[yellow]⚠ RELATIVE RANKING ONLY[/yellow]",
+            border_style="blue",
+        )
+    )
+    console.print()
+    
+    try:
+        run_batch_mmgbsa(
+            receptor=receptor,
+            ligands=ligands,
+            output_dir=output_dir,
+            skip_pdb4amber=skip_pdb4amber,
+        )
+        
+        console.print("[bold green]✓ Batch processing complete![/bold green]\n")
+    
+    except BatchError as e:
+        console.print()
+        console.print("[bold red]✗ Batch processing failed[/bold red]")
+        console.print()
+        console.print(str(e))
+        console.print()
+        raise typer.Exit(code=1)
+    
+    except Exception as e:
+        console.print()
+        console.print(f"[bold red]✗ Unexpected error:[/bold red] {e}")
+        logger.exception("Unexpected error during batch processing")
+        raise typer.Exit(code=1)
