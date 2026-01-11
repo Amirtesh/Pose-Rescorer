@@ -206,7 +206,7 @@ pipeline_output/
 ├── protein/         # Receptor parameters
 ├── ligand/          # Ligand parameters
 ├── complex/         # Combined topology
-└── rescore/         # Rescoring results (rescore_* for GB, mmpbsa_* for PB)
+└── rescore/         # Rescoring results (same folder name for GB/PB)
 ```
 
 **Options:**
@@ -240,10 +240,10 @@ batch_results/
 │   ├── compound_1/
 │   │   ├── ligand/
 │   │   ├── complex/
-│   │   └── rescore/
+│   │   └── rescore/             # Same directory name for any method
 │   ├── compound_2/
 │   └── ...
-└── rescore_batch_results.csv    # Summary table
+└── rescore_batch_results.csv    # Summary table (name does not change)
 ```
 
 **CSV format (method-specific column):**
