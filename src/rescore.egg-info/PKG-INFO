@@ -1,6 +1,6 @@
 Metadata-Version: 2.4
 Name: rescore
-Version: 0.1.0
+Version: 1.1
 Summary: Physics-based post-docking rescoring tool (MM/GBSA under the hood)
 Author: AmberTools MM/GBSA Team
 License: MIT

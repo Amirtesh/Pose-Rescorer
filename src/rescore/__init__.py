@@ -1,3 +1,3 @@
 """Rescore: Physics-based post-docking rescoring tool (MM/GBSA under the hood)."""
 
-__version__ = "0.1.0"
+__version__ = "1.1"
