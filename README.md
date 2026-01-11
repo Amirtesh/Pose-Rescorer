@@ -20,6 +20,7 @@ The MM/GBSA scores provide **relative binding strength** for comparison within a
 
 ### Core Capabilities
 - **Single-frame MM/GBSA** rescoring using AmberTools MMPBSA.py
+- **Restrained minimization** before scoring 
 - **Integrated pipeline** from PDB → parameters → complex → scores
 - **Batch processing** for multiple ligands against one receptor
 - **Automated parameterization** with GAFF2 + AM1-BCC charges
@@ -31,6 +32,7 @@ The MM/GBSA scores provide **relative binding strength** for comparison within a
 - **Ligand**: GAFF2 (General Amber Force Field 2)
 - **Charges**: AM1-BCC (semi-empirical quantum mechanics)
 - **Solvation**: Generalized Born (GB) implicit solvent (igb=5, OBC II)
+- **Minimization**: Restrained (backbone only), 100 cycles, GB implicit solvent
 - **Salt**: 0.15 M (physiological)
 
 ## 🚫 Limitations
@@ -68,6 +70,27 @@ rescore --version
 ```
 
 ## 📖 Usage
+
+### ⚡ Minimization Feature
+
+By default, **restrained energy minimization** is performed before MM/GBSA scoring to remove clashes from docking (similar to Schrödinger Prime MM/GBSA):
+
+- **Protocol**: 100 cycles (50 steepest descent + 50 conjugate gradient)
+- **Restraints**: Protein backbone atoms (N, CA, C) held fixed with 2.0 kcal/mol/Å² restraint
+- **Free to move**: Ligand and protein side chains
+- **Solvation**: GB implicit solvent (igb=5) with 12 Å cutoff
+- **Output**: `minimized_complex.pdb` saved for visualization
+
+**Control minimization:**
+```bash
+rescore integrate ... --minimize      # Default (ON)
+rescore integrate ... --no-minimize   # Skip minimization
+rescore batch ... --no-minimize       # Also works with batch
+```
+
+**Why minimize?** Docking produces poses with steric clashes. Minimization relaxes these while preserving the binding mode, improving MM/GBSA accuracy.
+
+---
 
 ### Command Overview
 
@@ -198,7 +221,8 @@ rescore integrate \
 2. Parameterize ligand (GAFF2 + AM1-BCC)
 3. Assemble complex (tleap combine)
 4. Validate assembled complex (optional)
-5. Run MM/GBSA or MM/PBSA rescoring
+5. Restrained minimization (removes clashes, default ON)
+6. Run MM/GBSA or MM/PBSA rescoring
 
 **Output structure:**
 ```
@@ -207,11 +231,21 @@ pipeline_output/
 ├── ligand/          # Ligand parameters
 ├── complex/         # Combined topology
 └── rescore/         # Rescoring results (same folder name for GB/PB)
+    ├── minimization/        # Minimization outputs (if --minimize)
+    │   ├── minimized_complex.pdb      # Minimized structure for visualization
+    │   ├── minimized.inpcrd           # Minimized coordinates
+    │   ├── minimization_info.txt      # Detailed sander output
+    │   └── minimization.in            # Sander input file
+    ├── rescore_output.dat   # Energy results (GB)
+    ├── rescore.in           # MMPBSA.py input
+    └── rescore.log          # Detailed calculation log
 ```
 
 **Options:**
 - `--skip-validation` - Skip structure validation step
 - `--skip-pdb4amber` - Skip pdb4amber processing
+- `--no-minimize` - Skip restrained minimization (default: ON)
+- `--method gb|pb` - Solvation method (default: gb)
 
 ---
 
