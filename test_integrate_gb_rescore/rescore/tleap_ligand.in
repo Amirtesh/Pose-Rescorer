@@ -1,7 +1,0 @@
-# Ligand topology for MM/GBSA
-source leaprc.gaff2
-loadamberparams ../ligand/ligand.frcmod
-ligand = loadmol2 ../ligand/ligand.mol2
-check ligand
-saveamberparm ligand ligand.prmtop ligand.inpcrd
-quit
