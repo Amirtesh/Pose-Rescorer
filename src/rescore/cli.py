@@ -13,27 +13,27 @@ from loguru import logger
 from rich.console import Console
 from rich.panel import Panel
 
-from mmgbsa import __version__
-from mmgbsa.validation import validate_pdb_complex, MMGBSAValidationError
-from mmgbsa.parameterization import (
+from rescore import __version__
+from rescore.validation import validate_pdb_complex, MMGBSAValidationError
+from rescore.parameterization import (
     parameterize_ligand,
     ParameterizationError,
     ChemistryValidationError,
 )
-from mmgbsa.parameterization.protein import (
+from rescore.parameterization.protein import (
     prepare_protein,
     ProteinPreparationError,
 )
-from mmgbsa.parameterization.complex import (
+from rescore.parameterization.complex import (
     prepare_complex,
     ComplexAssemblyError,
 )
-from mmgbsa.calculation import (
-    run_mmgbsa,
+from rescore.calculation import (
+    run_rescore,
     MMGBSACalculationError,
 )
-from mmgbsa.batch import (
-    run_batch_mmgbsa,
+from rescore.batch import (
+    run_batch_rescore,
     BatchError,
 )
 
@@ -168,7 +168,7 @@ def pdb_rescore(
         help="PDB file containing protein-ligand complex",
     ),
     output_dir: Path = typer.Option(
-        Path("mmgbsa_output"),
+        Path("rescore_output"),
         "--output",
         "-o",
         help="Output directory for results",
@@ -581,7 +581,7 @@ def run(
         help="Directory containing complex.prmtop and complex.inpcrd",
     ),
     output_dir: Path = typer.Option(
-        Path("mmgbsa_results"),
+        Path("rescore_results"),
         "--output",
         "-o",
         help="Output directory for MM/GBSA results",
@@ -657,11 +657,13 @@ def run(
         console.print("  - gb: Generalized Born (default, fast)")
         console.print("  - pb: Poisson-Boltzmann (slower, not more rigorous)")
         raise typer.Exit(code=1)
+    method_label = "MM/GBSA" if method == "gb" else "MM/PBSA"
+    method_label = "MM/GBSA" if method == "gb" else "MM/PBSA"
     
     console.print()
     console.print(
         Panel.fit(
-            f"[bold]MM/GBSA Rescoring[/bold]\n"
+            f"[bold]{method_label} Rescoring[/bold]\n"
             f"Complex: {complex_dir.name}/\n"
             f"Method: Single-frame {method.upper()}\n"
             f"[yellow]⚠ POST-DOCKING RESCORING[/yellow]\n"
@@ -671,9 +673,9 @@ def run(
     )
 
     try:
-        console.print(f"Running MM/GBSA calculation ({method.upper()})...", style="yellow")
+        console.print(f"Running {method_label} calculation ({method.upper()})...", style="yellow")
         
-        energies = run_mmgbsa(
+        energies = run_rescore(
             complex_dir=complex_dir,
             output_dir=output_dir,
             method=method,
@@ -681,7 +683,7 @@ def run(
 
         # Success message with results
         console.print()
-        console.print("✓ MM/GBSA calculation complete", style="green bold")
+        console.print(f"✓ {method_label} calculation complete", style="green bold")
         console.print()
         console.print("[bold]Energy Components (kcal/mol):[/bold]")
         
@@ -697,9 +699,9 @@ def run(
         
         console.print()
         console.print("[bold]Output files:[/bold]")
-        console.print(f"  - Results: {output_dir}/mmgbsa_output.dat")
-        console.print(f"  - Input:   {output_dir}/mmgbsa.in")
-        console.print(f"  - Log:     {output_dir}/mmgbsa.log")
+        console.print(f"  - Results: {output_dir}/rescore_output.dat")
+        console.print(f"  - Input:   {output_dir}/rescore.in")
+        console.print(f"  - Log:     {output_dir}/rescore.log")
         console.print()
         console.print("[yellow]⚠ IMPORTANT:[/yellow]")
         console.print("[dim]  This is RESCORING for relative ranking only[/dim]")
@@ -788,7 +790,7 @@ def integrate(
     ├── protein/      (protein.prmtop, protein.inpcrd)
     ├── ligand/       (ligand.mol2, ligand.frcmod)
     ├── complex/      (complex.prmtop, complex.inpcrd)
-    └── mmgbsa/       (mmgbsa_output.dat, mmgbsa.log, mmgbsa_metadata.json)
+    └── rescore/       (rescore_output.dat, rescore.log, rescore_metadata.json)
 
     REQUIREMENTS:
     - Receptor: PDB file (may contain non-standard naming)
@@ -837,12 +839,13 @@ def integrate(
         console.print("  - gb: Generalized Born (default, fast)")
         console.print("  - pb: Poisson-Boltzmann (slower, not more rigorous)")
         raise typer.Exit(code=1)
+    method_label = "MM/GBSA" if method == "gb" else "MM/PBSA"
 
     # Display header
     console.print()
     console.print(
         Panel.fit(
-            f"[bold]MM/GBSA Integrated Pipeline[/bold]\n"
+            f"[bold]{method_label} Integrated Pipeline[/bold]\n"
             f"Receptor: {receptor.name}\n"
             f"Ligand: {ligand.name}\n"
             f"Output: {output_dir}/\n"
@@ -857,7 +860,7 @@ def integrate(
     protein_dir = output_dir / "protein"
     ligand_dir = output_dir / "ligand"
     complex_dir = output_dir / "complex"
-    mmgbsa_dir = output_dir / "mmgbsa"
+    rescore_dir = output_dir / "rescore"
 
     try:
         # ============================================================
@@ -953,14 +956,14 @@ def integrate(
         # STEP 5: MM/GBSA Calculation
         # ============================================================
         console.print()
-        console.print("[bold cyan]Step 5/5:[/bold cyan] Running MM/GBSA rescoring...", style="cyan")
+        console.print(f"[bold cyan]Step 5/5:[/bold cyan] Running {method_label} rescoring...", style="cyan")
         
-        energies = run_mmgbsa(
+        energies = run_rescore(
             complex_dir=complex_dir,
-            output_dir=mmgbsa_dir,
+            output_dir=rescore_dir,
             method=method,
         )
-        console.print("  ✓ MM/GBSA complete", style="green")
+        console.print(f"  ✓ {method_label} complete", style="green")
 
         # ============================================================
         # FINAL RESULTS
@@ -968,7 +971,7 @@ def integrate(
         console.print()
         console.print("=" * 60)
         console.print()
-        console.print("[bold green]✓ MM/GBSA PIPELINE COMPLETE[/bold green]")
+        console.print(f"[bold green]✓ {method_label} PIPELINE COMPLETE[/bold green]")
         console.print()
         console.print("[bold]Energy Components (kcal/mol):[/bold]")
         
@@ -986,7 +989,7 @@ def integrate(
         console.print(f"  ├── protein/    (receptor parameters)")
         console.print(f"  ├── ligand/     (ligand parameters)")
         console.print(f"  ├── complex/    (combined topology)")
-        console.print(f"  └── mmgbsa/     (rescoring results)")
+        console.print(f"  └── rescore/     (rescoring results)")
         console.print()
         console.print("[yellow]⚠ CRITICAL REMINDER:[/yellow]")
         console.print("[dim]  This is POST-DOCKING RESCORING for relative ranking[/dim]")
@@ -1020,7 +1023,7 @@ def integrate(
 
     except MMGBSACalculationError as e:
         console.print()
-        console.print("[bold red]✗ MM/GBSA calculation failed[/bold red]")
+        console.print(f"[bold red]✗ {method_label} calculation failed[/bold red]")
         console.print()
         console.print(str(e))
         console.print()
@@ -1109,10 +1112,10 @@ def batch(
         │   ├── ligand1/
         │   │   ├── ligand/
         │   │   ├── complex/
-        │   │   └── mmgbsa/
+        │   │   └── rescore/
         │   └── ligand2/
         │       └── ...
-        └── mmgbsa_batch_results.csv
+        └── rescore_batch_results.csv
     """
     logger.remove()  # Remove default handler
     logger.add(
@@ -1141,7 +1144,7 @@ def batch(
     console.print()
     
     try:
-        run_batch_mmgbsa(
+        run_batch_rescore(
             receptor=receptor,
             ligands=ligands,
             output_dir=output_dir,

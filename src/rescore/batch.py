@@ -21,10 +21,10 @@ from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn
 from rich.table import Table
 
-from mmgbsa.parameterization import parameterize_ligand
-from mmgbsa.parameterization.protein import prepare_protein
-from mmgbsa.parameterization.complex import prepare_complex
-from mmgbsa.calculation import run_mmgbsa
+from rescore.parameterization import parameterize_ligand
+from rescore.parameterization.protein import prepare_protein
+from rescore.parameterization.complex import prepare_complex
+from rescore.calculation import run_rescore
 
 
 class BatchError(Exception):
@@ -163,6 +163,7 @@ def process_single_ligand(
         BatchError: If processing fails or receptor integrity violated
     """
     ligand_name = ligand_file.stem
+    method_label = "MM/GBSA" if method == "gb" else "MM/PBSA"
     logger.info(f"Processing ligand: {ligand_name}")
     
     # Verify receptor integrity before processing
@@ -195,12 +196,12 @@ def process_single_ligand(
         )
         logger.success(f"  ✓ Complex assembled")
         
-        # Step 3: Run MM/GBSA rescoring
-        mmgbsa_dir = ligand_output_dir / "mmgbsa"
-        mmgbsa_dir.mkdir(exist_ok=True)
+        # Step 3: Run rescoring
+        rescore_dir = ligand_output_dir / "rescore"
+        rescore_dir.mkdir(exist_ok=True)
         
         # Copy receptor topology to expected location
-        # (needed because run_mmgbsa expects protein/ subdirectory in parent of complex/)
+        # (needed because run_rescore expects protein/ subdirectory in parent of complex/)
         # Structure: ligand_output_dir/protein/, ligand_output_dir/ligand/, ligand_output_dir/complex/
         parent_protein_dir = ligand_output_dir / "protein"
         parent_protein_dir.mkdir(exist_ok=True)
@@ -209,12 +210,14 @@ def process_single_ligand(
         shutil.copy2(receptor_topology_dir / "protein.prmtop", parent_protein_dir / "protein.prmtop")
         shutil.copy2(receptor_topology_dir / "protein.inpcrd", parent_protein_dir / "protein.inpcrd")
         
-        energies = run_mmgbsa(
+        energies = run_rescore(
             complex_dir=complex_dir,
-            output_dir=mmgbsa_dir,
+            output_dir=rescore_dir,
             method=method,
         )
-        logger.success(f"  ✓ MM/GBSA complete: ΔG = {energies.get('DELTA_G', 'N/A'):.2f} kcal/mol")
+        logger.success(
+            f"  ✓ {method_label} complete: ΔG = {energies.get('DELTA_G', 'N/A'):.2f} kcal/mol"
+        )
         
         # Verify receptor integrity after processing
         validate_receptor_topology_integrity(receptor_prmtop, receptor_hash)
@@ -243,7 +246,7 @@ def process_single_ligand(
         }
 
 
-def run_batch_mmgbsa(
+def run_batch_rescore(
     receptor: Path,
     ligands: Path,
     output_dir: Path,
@@ -275,7 +278,12 @@ def run_batch_mmgbsa(
     Raises:
         BatchError: If batch processing fails
     """
-    logger.info(f"Starting batch MM/GBSA rescoring (method={method.upper()})")
+    method = method.lower()
+    if method not in ["gb", "pb"]:
+        raise BatchError("Invalid method. Expected 'gb' or 'pb'.")
+    method_label = "MM/GBSA" if method == "gb" else "MM/PBSA"
+
+    logger.info(f"Starting batch {method_label} rescoring (method={method.upper()})")
     logger.warning("⚠ RELATIVE RANKING ONLY - not thermodynamically rigorous ΔG")
     
     # Create output directory
@@ -360,7 +368,7 @@ def run_batch_mmgbsa(
     
     # Step 4: Write results CSV
     console.print("\n[bold cyan]Step 4:[/bold cyan] Writing results...", style="cyan")
-    csv_path = output_dir / "mmgbsa_batch_results.csv"
+    csv_path = output_dir / "rescore_batch_results.csv"
 
     delta_field = "delta_g_gb" if method == "gb" else "delta_g_pb"
     with open(csv_path, "w", newline="") as csvfile:
@@ -381,7 +389,7 @@ def run_batch_mmgbsa(
     
     # Display summary table
     console.print("\n" + "=" * 60)
-    console.print("[bold]BATCH MM/GBSA RESULTS[/bold]")
+    console.print(f"[bold]BATCH {method_label} RESULTS[/bold]")
     console.print("=" * 60 + "\n")
     
     table = Table(show_header=True, header_style="bold cyan")

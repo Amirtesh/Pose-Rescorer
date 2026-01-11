@@ -1,3 +1,28 @@
+Metadata-Version: 2.4
+Name: rescore
+Version: 0.1.0
+Summary: Physics-based post-docking rescoring tool (MM/GBSA under the hood)
+Author: AmberTools MM/GBSA Team
+License: MIT
+Classifier: Development Status :: 3 - Alpha
+Classifier: Intended Audience :: Science/Research
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Topic :: Scientific/Engineering :: Chemistry
+Requires-Python: >=3.10
+Description-Content-Type: text/markdown
+Requires-Dist: biopython>=1.80
+Requires-Dist: typer>=0.9.0
+Requires-Dist: rich>=13.0.0
+Requires-Dist: loguru>=0.7.0
+Requires-Dist: numpy>=1.24.0
+Requires-Dist: pandas>=2.0.0
+Requires-Dist: parmed>=4.0.0
+Provides-Extra: dev
+Requires-Dist: pytest>=7.0.0; extra == "dev"
+Requires-Dist: black>=23.0.0; extra == "dev"
+Requires-Dist: isort>=5.12.0; extra == "dev"
+Requires-Dist: mypy>=1.0.0; extra == "dev"
+
 # Physics-Based Post-Docking Rescoring Tool
 
 **Physics-based post-docking rescoring tool (MM/GBSA under the hood).**
@@ -164,21 +189,22 @@ rescore assemble \
 
 ### 5️⃣ Run Rescoring
 
-Execute single-frame MM/GBSA or MM/PBSA rescoring:
+Execute single-frame MM/GBSA rescoring:
 
 ```bash
-rescore run complex_params/ -o rescore_results/ --method pb  # use --method gb for GB (default)
+rescore run complex_params/ -o mmgbsa_results/
 ```
 
-**Output (method-dependent filenames):**
-- GB: `rescore_results/rescore_output.dat`, `rescore_results/rescore.in`, `rescore_results/rescore.log`
-- PB: `rescore_results/mmpbsa_output.dat`, `rescore_results/mmpbsa.in`, `rescore_results/mmpbsa.log`
-- `rescore_results/ligand.prmtop` - Ligand topology (generated)
+**Output:**
+- `mmgbsa_results/mmgbsa_output.dat` - Energy components
+- `mmgbsa_results/mmgbsa.in` - MMPBSA.py input
+- `mmgbsa_results/mmgbsa.log` - Detailed log
+- `mmgbsa_results/ligand.prmtop` - Ligand topology (generated)
 
 **Energy components:**
 - **ΔG_bind** - Total binding energy (DELTA TOTAL)
 - **ΔH** - Enthalpy contribution (DELTA G gas)
-- **ΔG_GB** or **ΔG_PB** - Polar solvation energy (DELTA G solv)
+- **ΔG_GB** - Polar solvation energy (DELTA G solv)
 
 ---
 
@@ -198,7 +224,7 @@ rescore integrate \
 2. Parameterize ligand (GAFF2 + AM1-BCC)
 3. Assemble complex (tleap combine)
 4. Validate assembled complex (optional)
-5. Run MM/GBSA or MM/PBSA rescoring
+5. Run MM/GBSA rescoring
 
 **Output structure:**
 ```
@@ -206,7 +232,7 @@ pipeline_output/
 ├── protein/         # Receptor parameters
 ├── ligand/          # Ligand parameters
 ├── complex/         # Combined topology
-└── rescore/         # Rescoring results (rescore_* for GB, mmpbsa_* for PB)
+└── mmgbsa/          # Rescoring results
 ```
 
 **Options:**
@@ -240,16 +266,17 @@ batch_results/
 │   ├── compound_1/
 │   │   ├── ligand/
 │   │   ├── complex/
-│   │   └── rescore/
+│   │   └── mmgbsa/
 │   ├── compound_2/
 │   └── ...
-└── rescore_batch_results.csv    # Summary table
+└── mmgbsa_batch_results.csv    # Summary table
 ```
 
-**CSV format (method-specific column):**
+**CSV format:**
 ```csv
-ligand_name,delta_g_bind,delta_h,delta_g_gb,status   # GB runs
-ligand_name,delta_g_bind,delta_h,delta_g_pb,status   # PB runs
+ligand_name,delta_g_bind,delta_h,delta_g_gb,status
+compound_1,-8.45,-52.34,43.89,success
+compound_2,-6.78,-48.12,41.34,success
 ```
 
 **Requirements:**
@@ -263,12 +290,12 @@ ligand_name,delta_g_bind,delta_h,delta_g_pb,status   # PB runs
 
 ### Energy Components
 
-From `rescore_output.dat` (GB) or `mmpbsa_output.dat` (PB):
+From `mmgbsa_output.dat`:
 
 ```
 DELTA TOTAL    -6.79    # ΔG_bind: Total binding score
 DELTA G gas   -49.75    # ΔH: Gas-phase enthalpy
-DELTA G solv   42.96    # ΔG_GB or ΔG_PB: Solvation penalty
+DELTA G solv   42.96    # ΔG_GB: Solvation penalty
 ```
 
 ### Interpretation Guidelines
@@ -421,7 +448,7 @@ Detailed execution logs from AmberTools programs
 pytest tests/
 
 # Run with coverage
-pytest tests/ --cov=rescore --cov-report=html
+pytest tests/ --cov=mmgbsa --cov-report=html
 
 # Run specific test
 pytest tests/test_validation.py

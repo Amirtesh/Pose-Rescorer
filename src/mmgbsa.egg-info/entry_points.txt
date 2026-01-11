@@ -1,2 +1,0 @@
-[console_scripts]
-mmgbsa = mmgbsa.cli:app
