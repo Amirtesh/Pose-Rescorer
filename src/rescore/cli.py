@@ -593,6 +593,11 @@ def run(
         help="Solvation method: 'gb' (default, fast) or 'pb' (slower, not more rigorous)",
         case_sensitive=False,
     ),
+    minimize: bool = typer.Option(
+        True,
+        "--minimize/--no-minimize",
+        help="Run restrained minimization before scoring (default: ON)",
+    ),
     verbose: bool = typer.Option(
         False,
         "--verbose",
@@ -605,6 +610,7 @@ def run(
 
     This command performs MM/GBSA rescoring for post-docking analysis:
     - Single structure (no MD trajectory)
+    - Optional restrained minimization (removes clashes)
     - GB or PB implicit solvent
     - No entropy calculation
     - No decomposition
@@ -679,6 +685,7 @@ def run(
             complex_dir=complex_dir,
             output_dir=output_dir,
             method=method,
+            minimize=minimize,
         )
 
         # Success message with results
@@ -765,6 +772,11 @@ def integrate(
         "--skip-pdb4amber",
         help="Skip pdb4amber preprocessing (not recommended)",
     ),
+    minimize: bool = typer.Option(
+        True,
+        "--minimize/--no-minimize",
+        help="Run restrained minimization before scoring (default: ON)",
+    ),
     verbose: bool = typer.Option(
         False,
         "--verbose",
@@ -783,14 +795,15 @@ def integrate(
     2. Protein preparation (pdb4amber + tleap)
     3. Ligand parameterization (GAFF2 + AM1-BCC)
     4. Complex assembly (combine topologies)
-    5. MM/GBSA single-frame rescoring (GB or PB)
+    5. Restrained minimization (optional, removes clashes)
+    6. MM/GBSA single-frame rescoring (GB or PB)
 
     OUTPUT DIRECTORY STRUCTURE:
     output/
     ├── protein/      (protein.prmtop, protein.inpcrd)
     ├── ligand/       (ligand.mol2, ligand.frcmod)
     ├── complex/      (complex.prmtop, complex.inpcrd)
-    └── rescore/       (rescore_output.dat, rescore.log, rescore_metadata.json)
+    └── rescore/       (rescore_output.dat, rescore.log, minimization/)
 
     REQUIREMENTS:
     - Receptor: PDB file (may contain non-standard naming)
@@ -799,7 +812,7 @@ def integrate(
     CRITICAL NOTES:
     - This is POST-DOCKING RESCORING for relative ranking
     - Not thermodynamically rigorous binding free energy
-    - No solvation, minimization, or MD simulation
+    - Optional minimization relaxes clashes (NOT MD)
     - Fail-fast on any error (no silent fixes)
 
     Examples:
@@ -962,6 +975,7 @@ def integrate(
             complex_dir=complex_dir,
             output_dir=rescore_dir,
             method=method,
+            minimize=minimize,
         )
         console.print(f"  ✓ {method_label} complete", style="green")
 
@@ -1075,6 +1089,11 @@ def batch(
         help="Implicit solvent method: gb (Generalized Born) or pb (Poisson-Boltzmann)",
         case_sensitive=False,
     ),
+    minimize: bool = typer.Option(
+        True,
+        "--minimize/--no-minimize",
+        help="Run restrained minimization before scoring (default: ON)",
+    ),
 ) -> None:
     """
     Batch rescoring for multiple ligands against one receptor.
@@ -1083,7 +1102,7 @@ def batch(
     
     \b
     - Prepares receptor once (topology reused for all ligands)
-    - Processes each ligand: parameterize → assemble → rescore (GB or PB)
+    - Processes each ligand: parameterize → assemble → minimize (optional) → rescore
     - Validates receptor integrity throughout (hash checking)
     - Outputs CSV with all results for relative ranking
     
@@ -1150,6 +1169,7 @@ def batch(
             output_dir=output_dir,
             skip_pdb4amber=skip_pdb4amber,
             method=method,
+            minimize=minimize,
         )
         
         console.print("[bold green]✓ Batch processing complete![/bold green]\n")

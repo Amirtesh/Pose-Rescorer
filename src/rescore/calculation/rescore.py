@@ -6,9 +6,9 @@ This module implements MINIMAL single-frame MM/GBSA rescoring using MMPBSA.py.
 CRITICAL SCOPE LIMITATIONS:
 - Single structure only (no trajectory, no MD)
 - Implicit solvent (GB or PB) only
+- Optional restrained minimization before scoring
 - No entropy calculation
 - No per-residue decomposition
-- No solvation or minimization
 
 This is POST-DOCKING RESCORING, not thermodynamically rigorous binding free energy.
 Use for relative ranking only, not absolute ΔG values.
@@ -89,6 +89,195 @@ def validate_complex_inputs(complex_dir: Path) -> tuple[Path, Path]:
     
     logger.success("Complex input files validated")
     return complex_prmtop, complex_inpcrd
+
+
+def minimize_complex(
+    complex_prmtop: Path,
+    complex_inpcrd: Path,
+    output_dir: Path,
+    method: str = "gb",
+    restraint_weight: float = 2.0,
+    maxcyc: int = 100,
+) -> Path:
+    """
+    Run restrained energy minimization on assembled complex.
+    
+    This prepares the complex for MM/GBSA by relaxing steric clashes
+    and electrostatics while preserving the overall protein structure.
+    
+    Protocol:
+    - Positional restraints on protein backbone (N, CA, C) atoms
+    - Ligand and side chains free to relax
+    - Steepest descent (50%) + conjugate gradient (50%)
+    - Implicit solvent (GB) with reasonable cutoff
+    
+    IMPORTANT: This is NOT molecular dynamics. This is minimization only
+    to remove bad contacts from docking. Still single-frame rescoring.
+    
+    Args:
+        complex_prmtop: Complex topology file
+        complex_inpcrd: Complex coordinate file
+        output_dir: Directory for minimization outputs
+        method: Solvation method ("gb" or "pb") - always uses GB for speed
+        restraint_weight: Restraint force constant (kcal/mol/Å²)
+        maxcyc: Maximum minimization cycles (default: 100)
+        
+    Returns:
+        Path to minimized coordinates (minimized.inpcrd)
+        
+    Raises:
+        MMGBSACalculationError: If sander fails
+    """
+    logger.info("Running restrained minimization (Prime-style MM/GBSA preparation)")
+    logger.info(f"  Restraining protein backbone (N, CA, C)")
+    logger.info(f"  Ligand and side chains free to relax")
+    logger.info(f"  Restraint weight: {restraint_weight} kcal/mol/Å²")
+    logger.info(f"  Max cycles: {maxcyc}")
+    logger.info(f"  Solvation: GB implicit solvent")
+    
+    if method.lower() == "pb":
+        logger.info("  Note: Using GB for minimization speed; MM/GBSA will use PB")
+    
+    output_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Output files
+    minimized_inpcrd = output_dir / "minimized.inpcrd"
+    min_log = output_dir / "minimization.log"
+    min_info = output_dir / "minimization_info.txt"
+    min_input = output_dir / "minimization.in"
+    
+    # Generate sander input for restrained minimization
+    ncyc = maxcyc // 2  # First half steepest descent
+    
+    min_input_content = f"""Restrained minimization for MM/GBSA preparation
+&cntrl
+  imin=1,
+  maxcyc={maxcyc},
+  ncyc={ncyc},
+  ntb=0,
+  igb=5,
+  saltcon=0.15,
+  cut=12.0,
+  ntr=1,
+  restraintmask='@N,CA,C',
+  restraint_wt={restraint_weight},
+  ntpr=50,
+/
+"""
+    
+    with open(min_input, "w") as f:
+        f.write(min_input_content)
+    
+    logger.debug(f"Minimization input written: {min_input}")
+    
+    # Run sander
+    logger.info("Running sander minimization...")
+    logger.debug(f"Command: sander -O -i {min_input} -p {complex_prmtop} -c {complex_inpcrd} -o {min_info} -r {minimized_inpcrd} -ref {complex_inpcrd}")
+    
+    # Run without capturing output first to see if there's an immediate error
+    result = subprocess.run(
+        [
+            "sander",
+            "-O",
+            "-i", str(min_input),
+            "-p", str(complex_prmtop),
+            "-c", str(complex_inpcrd),
+            "-o", str(min_info),
+            "-r", str(minimized_inpcrd),
+            "-ref", str(complex_inpcrd),
+        ],
+        capture_output=True,
+        text=True,
+        timeout=120,  # 2 minute timeout
+    )
+    
+    # Write output to log
+    with open(min_log, "w") as f:
+        f.write(result.stdout)
+        if result.stderr:
+            f.write("\n\n=== STDERR ===\n")
+            f.write(result.stderr)
+    
+    if result.returncode != 0 or not minimized_inpcrd.exists():
+        with open(min_log, "r") as f:
+            log_content = f.read()
+        raise MMGBSACalculationError(
+            f"sander minimization failed (exit code {result.returncode})\n"
+            f"Check log: {min_log}\n"
+            f"Last 50 lines:\n{log_content[-2000:]}"
+        )
+    
+    logger.success(f"Minimization complete: {minimized_inpcrd}")
+    logger.info(f"  Log: {min_log}")
+    logger.info(f"  Details: {min_info}")
+    
+    # Convert minimized structure to PDB for visualization
+    minimized_pdb = output_dir / "minimized_complex.pdb"
+    pdb_debug_log = output_dir / "pdb_generation_debug.log"
+    logger.info("Converting minimized structure to PDB format...")
+    
+    try:
+        # Write debug info to file (visible even when logger is suppressed)
+        with open(pdb_debug_log, "w") as debug:
+            debug.write(f"PDB Generation Debug Log\n")
+            debug.write(f"========================\n")
+            debug.write(f"complex_prmtop: {complex_prmtop}\n")
+            debug.write(f"complex_prmtop exists: {complex_prmtop.exists()}\n")
+            debug.write(f"minimized_inpcrd: {minimized_inpcrd}\n")
+            debug.write(f"minimized_inpcrd exists: {minimized_inpcrd.exists()}\n")
+            debug.write(f"output_dir: {output_dir}\n")
+            debug.write(f"minimized_pdb target: {minimized_pdb}\n\n")
+        
+        # ambpdb has issues with spaces in absolute paths, use relative paths
+        # We're in output_dir (minimization/), complex_prmtop is in ../../complex/
+        rel_prmtop = Path("../../complex") / complex_prmtop.name
+        rel_inpcrd = minimized_inpcrd.name  # Already in current dir
+        
+        pdb_result = subprocess.run(
+            ["ambpdb", "-p", str(rel_prmtop), "-c", str(rel_inpcrd)],
+            capture_output=True,
+            text=True,
+            check=False,  # Don't raise exception on non-zero exit
+            cwd=str(output_dir.absolute()),  # Run from output directory
+        )
+        
+        # Append result to debug log
+        with open(pdb_debug_log, "a") as debug:
+            debug.write(f"ambpdb command: ambpdb -p {complex_prmtop} -c {minimized_inpcrd}\n")
+            debug.write(f"returncode: {pdb_result.returncode}\n")
+            debug.write(f"stdout length: {len(pdb_result.stdout) if pdb_result.stdout else 0}\n")
+            debug.write(f"stdout empty: {not pdb_result.stdout}\n")
+            debug.write(f"stderr length: {len(pdb_result.stderr) if pdb_result.stderr else 0}\n")
+            debug.write(f"stderr: {pdb_result.stderr}\n")
+            if pdb_result.stdout:
+                debug.write(f"\nFirst 500 chars of stdout:\n{pdb_result.stdout[:500]}\n")
+        
+        logger.debug(f"ambpdb returncode: {pdb_result.returncode}")
+        logger.debug(f"ambpdb stdout length: {len(pdb_result.stdout) if pdb_result.stdout else 0}")
+        logger.debug(f"ambpdb stderr: {pdb_result.stderr[:200] if pdb_result.stderr else 'None'}")
+        
+        if pdb_result.returncode == 0 and pdb_result.stdout:
+            with open(minimized_pdb, "w") as f:
+                f.write(pdb_result.stdout)
+            logger.success(f"Minimized PDB saved: {minimized_pdb} ({len(pdb_result.stdout)} bytes)")
+        else:
+            logger.warning(f"Could not generate PDB file")
+            logger.warning(f"  ambpdb returncode: {pdb_result.returncode}")
+            logger.warning(f"  stdout empty: {not pdb_result.stdout}")
+            logger.warning(f"  stderr: {pdb_result.stderr[:500] if pdb_result.stderr else 'None'}")
+            # Create empty file so user knows it was attempted
+            minimized_pdb.touch()
+    except Exception as e:
+        logger.error(f"Exception during PDB generation: {e}")
+        # Log exception to debug file
+        with open(pdb_debug_log, "a") as debug:
+            debug.write(f"\nEXCEPTION: {e}\n")
+            import traceback
+            debug.write(traceback.format_exc())
+        # Create empty file to indicate attempt was made
+        minimized_pdb.touch()
+    
+    return minimized_inpcrd
 
 
 def generate_mmpbsa_input(output_dir: Path, method: str = "gb") -> Path:
@@ -414,12 +603,14 @@ def run_rescore(
     complex_dir: Path,
     output_dir: Path,
     method: str = "gb",
+    minimize: bool = True,
 ) -> Dict[str, float]:
     """
     Run single-frame MM/GBSA rescoring calculation.
     
     This is a MINIMAL implementation for post-docking rescoring:
     - Single structure (no MD trajectory)
+    - Optional restrained minimization (removes clashes)
     - GB or PB implicit solvent
     - No entropy calculation
     - No decomposition
@@ -439,6 +630,7 @@ def run_rescore(
         complex_dir: Directory containing complex.prmtop and complex.inpcrd
         output_dir: Directory for calculation outputs
         method: Solvation method - "gb" (default) or "pb"
+        minimize: Run restrained minimization before scoring (default: True)
         
     Returns:
         Dictionary of energy components (kcal/mol)
@@ -450,6 +642,7 @@ def run_rescore(
     logger.info(f"  Complex: {complex_dir}")
     logger.info(f"  Output:  {output_dir}")
     logger.info(f"  Method:  {method.upper()}")
+    logger.info(f"  Minimize: {'YES' if minimize else 'NO'}")
     logger.warning("This is POST-DOCKING RESCORING, not thermodynamic ΔG")
     
     # Step 1: Validate inputs - need complex, protein, and ligand directories
@@ -502,21 +695,35 @@ def run_rescore(
     
     logger.success("All required files found")
     
-    # Step 2: Generate MMPBSA.py input
+    # Step 2: Run minimization if requested
+    if minimize:
+        minimized_inpcrd = minimize_complex(
+            complex_prmtop,
+            complex_inpcrd,
+            output_dir / "minimization",
+            method=method,
+        )
+        # Use minimized coordinates for MM/GBSA
+        complex_inpcrd = minimized_inpcrd
+        logger.info("Using minimized coordinates for MM/GBSA calculation")
+    else:
+        logger.info("Skipping minimization (using original coordinates)")
+    
+    # Step 3: Generate MMPBSA.py input
     output_dir.mkdir(parents=True, exist_ok=True)
     input_file = generate_mmpbsa_input(output_dir, method=method)
     
-    # Step 2.5: Write metadata
+    # Step 3.5: Write metadata
     write_metadata(output_dir, method)
     
-    # Step 3: Generate ligand topology using tleap
+    # Step 4: Generate ligand topology using tleap
     logger.info("Generating ligand topology with tleap...")
     ligand_prmtop = output_dir / "ligand.prmtop"
     ligand_inpcrd = output_dir / "ligand.inpcrd"
     
     generate_ligand_topology(ligand_mol2, ligand_frcmod, ligand_prmtop, ligand_inpcrd, output_dir)
     
-    # Step 4: Run MMPBSA.py with protein and ligand topologies
+    # Step 5: Run MMPBSA.py with protein and ligand topologies
     run_mmpbsa_calculation(
         complex_prmtop,
         complex_inpcrd,
@@ -527,7 +734,7 @@ def run_rescore(
         method=method,
     )
     
-    # Step 4: Parse results
+    # Step 6: Parse results
     energies = parse_rescore_results(output_dir, method=method)
     
     prefix = "mmpbsa" if method.lower() == "pb" else "rescore"

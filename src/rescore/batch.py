@@ -142,6 +142,7 @@ def process_single_ligand(
     output_dir: Path,
     receptor_hash: str,
     method: str = "gb",
+    minimize: bool = True,
 ) -> Dict[str, Any]:
     """
     Process a single ligand against the pre-prepared receptor.
@@ -155,6 +156,7 @@ def process_single_ligand(
         output_dir: Base output directory for batch
         receptor_hash: Expected receptor topology hash
         method: Implicit solvent method ("gb" or "pb")
+        minimize: Run restrained minimization before scoring
         
     Returns:
         Dictionary with ligand_name and energy components
@@ -214,6 +216,7 @@ def process_single_ligand(
             complex_dir=complex_dir,
             output_dir=rescore_dir,
             method=method,
+            minimize=minimize,
         )
         logger.success(
             f"  ✓ {method_label} complete: ΔG = {energies.get('DELTA_G', 'N/A'):.2f} kcal/mol"
@@ -252,6 +255,7 @@ def run_batch_rescore(
     output_dir: Path,
     skip_pdb4amber: bool = False,
     method: str = "gb",
+    minimize: bool = True,
 ) -> List[Dict[str, Any]]:
     """
     Run batch MM/GBSA rescoring for multiple ligands against one receptor.
@@ -271,6 +275,7 @@ def run_batch_rescore(
         output_dir: Output directory for batch results
         skip_pdb4amber: Skip pdb4amber processing
         method: Implicit solvent method ("gb" or "pb")
+        minimize: Run restrained minimization before scoring
         
     Returns:
         List of result dictionaries for each ligand
@@ -361,6 +366,7 @@ def run_batch_rescore(
                 output_dir=output_dir / "ligands",
                 receptor_hash=receptor_hash,
                 method=method,
+                minimize=minimize,
             )
             results.append(result)
             
