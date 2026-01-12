@@ -398,7 +398,7 @@ def run_antechamber(
             "  - Invalid bond connectivity\n"
             "  - Missing hydrogens (antechamber requires all hydrogens)\n"
             "  - Incorrect geometry\n\n"
-            f"Input file: {input_pdb}\n"
+            f"Input file: {input_file}\n"
         )
         raise AntechamberError(error_msg)
 
