@@ -1,4 +1,4 @@
-name: mmgbsa-dev
+name: pose-rescorer
 channels:
   - conda-forge
   - bioconda
