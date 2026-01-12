@@ -392,7 +392,7 @@ def run_antechamber(
             f"Command: {' '.join(cmd)}\n\n"
             f"STDOUT:\n{e.stdout}\n\n"
             f"STDERR:\n{e.stderr}\n\n"
-            "Inspect the ligand PDB file for structural issues.\n"
+            "Inspect the ligand file for structural issues.\n"
             "Common causes:\n"
             "  - Unrecognized atom types\n"
             "  - Invalid bond connectivity\n"
