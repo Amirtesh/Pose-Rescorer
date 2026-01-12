@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CLI Reference - Pose Rescorer</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <nav>
+        <ul>
+            <h1 style="font-size: 2.5rem;">Pose Rescorer <span class="version">v1.1</span></h1>
+            <li><a href="index.html">Overview</a></li>
+            <li><a href="install.html">Installation</a></li>
+            <li><a href="quickstart.html">Quickstart</a></li>
+            <li><a href="cli.html" class="active">CLI Reference</a></li>
+            <li><a href="limitations.html">Limitations</a></li>
+        </ul>
+    </nav>
+
+    <main>
+        <h1 style="font-size: 3.5rem;">CLI Reference</h1>
+        <p class="subtitle">Command-line interface documentation</p>
+
+        <h2 id="integrate">rescore integrate</h2>
+        <p>
+            Run the complete rescoring pipeline for a single receptor-ligand pair in one command.
+        </p>
+
+        <h3>Usage</h3>
+        <pre><code>rescore integrate [OPTIONS]</code></pre>
+
+        <h3>Required Arguments</h3>
+        <table>
+            <tr>
+                <th>Option</th>
+                <th>Description</th>
+            </tr>
+            <tr>
+                <td><code>--receptor</code>, <code>-r</code></td>
+                <td>Path to receptor PDB file (protein only, no waters or ions)</td>
+            </tr>
+            <tr>
+                <td><code>--ligand</code>, <code>-l</code></td>
+                <td>Path to ligand MOL2 file with 3D coordinates</td>
+            </tr>
+            <tr>
+                <td><code>--output</code>, <code>-o</code></td>
+                <td>Output directory for all results</td>
+            </tr>
+        </table>
+
+        <h3>Optional Arguments</h3>
+        <table>
+            <tr>
+                <th>Option</th>
+                <th>Default</th>
+                <th>Description</th>
+            </tr>
+            <tr>
+                <td><code>--method</code>, <code>-m</code></td>
+                <td><code>gb</code></td>
+                <td>Solvation method: <code>gb</code> or <code>pb</code></td>
+            </tr>
+            <tr>
+                <td><code>--minimize</code> / <code>--no-minimize</code></td>
+                <td><code>--minimize</code></td>
+                <td>Run restrained minimization before scoring</td>
+            </tr>
+            <tr>
+                <td><code>--skip-validation</code></td>
+                <td>False</td>
+                <td>Skip structure validation step</td>
+            </tr>
+            <tr>
+                <td><code>--skip-pdb4amber</code></td>
+                <td>False</td>
+                <td>Skip pdb4amber preprocessing (not recommended)</td>
+            </tr>
+        </table>
+
+        <h3>Example</h3>
+        <pre><code># Default (GB with minimization)
+rescore integrate \
+  --receptor protein.pdb \
+  --ligand ligand.mol2 \
+  -o output/
+
+# PB method without minimization
+rescore integrate \
+  --receptor protein.pdb \
+  --ligand ligand.mol2 \
+  -o output/ \
+  --method pb \
+  --no-minimize</code></pre>
+
+        <h3>Workflow Steps</h3>
+        <ol>
+            <li><strong>Protein preparation:</strong> pdb4amber normalization + tleap parameterization (ff14SB)</li>
+            <li><strong>Ligand parameterization:</strong> antechamber with GAFF2 and AM1-BCC charges</li>
+            <li><strong>Complex assembly:</strong> tleap combines protein and ligand</li>
+            <li><strong>Validation:</strong> Structure checks (optional)</li>
+            <li><strong>Minimization:</strong> Restrained minimization with GB (optional, default ON)</li>
+            <li><strong>MM/GBSA calculation:</strong> Single-frame energy computation</li>
+        </ol>
+
+        <h3>Output Structure</h3>
+        <pre><code>output/
+├── protein/         # Receptor topology files
+├── ligand/          # Ligand force field files
+├── complex/         # Combined topology
+└── rescore/         # Energy results
+    ├── minimization/
+    │   └── minimized_complex.pdb
+    ├── rescore_output.dat
+    └── rescore.log</code></pre>
+
+        <hr>
+
+        <h2 id="batch">rescore batch</h2>
+        <p>
+            Rescore multiple ligands against a single receptor. The receptor is prepared once and reused
+            for all ligands, making this efficient for high-throughput screening.
+        </p>
+
+        <h3>Usage</h3>
+        <pre><code>rescore batch [OPTIONS]</code></pre>
+
+        <h3>Required Arguments</h3>
+        <table>
+            <tr>
+                <th>Option</th>
+                <th>Description</th>
+            </tr>
+            <tr>
+                <td><code>--receptor</code>, <code>-r</code></td>
+                <td>Path to receptor PDB file</td>
+            </tr>
+            <tr>
+                <td><code>--ligands</code>, <code>-l</code></td>
+                <td>Directory containing MOL2 files or single MOL2 file</td>
+            </tr>
+            <tr>
+                <td><code>--output</code>, <code>-o</code></td>
+                <td>Output directory for batch results</td>
+            </tr>
+        </table>
+
+        <h3>Optional Arguments</h3>
+        <table>
+            <tr>
+                <th>Option</th>
+                <th>Default</th>
+                <th>Description</th>
+            </tr>
+            <tr>
+                <td><code>--method</code>, <code>-m</code></td>
+                <td><code>gb</code></td>
+                <td>Solvation method: <code>gb</code> or <code>pb</code></td>
+            </tr>
+            <tr>
+                <td><code>--minimize</code> / <code>--no-minimize</code></td>
+                <td><code>--minimize</code></td>
+                <td>Run restrained minimization for each ligand</td>
+            </tr>
+            <tr>
+                <td><code>--skip-pdb4amber</code></td>
+                <td>False</td>
+                <td>Skip pdb4amber preprocessing of receptor</td>
+            </tr>
+        </table>
+
+        <h3>Example</h3>
+        <pre><code># Batch rescoring with directory of ligands
+rescore batch \
+  --receptor protein.pdb \
+  --ligands ligands_directory/ \
+  -o batch_results/
+
+# Single method change for all ligands
+rescore batch \
+  --receptor protein.pdb \
+  --ligands ligands_directory/ \
+  -o batch_results/ \
+  --method pb</code></pre>
+
+        <h3>Input Directory Structure</h3>
+        <p>The <code>--ligands</code> directory should contain MOL2 files:</p>
+        <pre><code>ligands_directory/
+├── compound_1.mol2
+├── compound_2.mol2
+├── compound_3.mol2
+└── ...</code></pre>
+
+        <h3>Output Structure</h3>
+        <pre><code>batch_results/
+├── receptor/                # Prepared once, reused
+├── ligands/
+│   ├── compound_1/
+│   │   ├── ligand/
+│   │   ├── complex/
+│   │   └── rescore/
+│   │       ├── minimization/
+│   │       └── rescore_output.dat
+│   ├── compound_2/
+│   └── ...
+└── rescore_batch_results.csv    # Summary table</code></pre>
+
+        <h3>CSV Output</h3>
+        <p>Results are summarized in <code>rescore_batch_results.csv</code>:</p>
+        <pre><code>ligand_name,delta_g_bind,delta_h,delta_g_gb,status
+compound_1,-26.65,-65.65,39.00,success
+compound_2,-31.42,-70.18,38.76,success
+compound_3,-22.14,-58.90,36.76,success</code></pre>
+
+        <table>
+            <tr>
+                <th>Column</th>
+                <th>Description</th>
+            </tr>
+            <tr>
+                <td><code>ligand_name</code></td>
+                <td>Ligand filename (without extension)</td>
+            </tr>
+            <tr>
+                <td><code>delta_g_bind</code></td>
+                <td>Total binding energy (kcal/mol)</td>
+            </tr>
+            <tr>
+                <td><code>delta_h</code></td>
+                <td>Enthalpy contribution (kcal/mol)</td>
+            </tr>
+            <tr>
+                <td><code>delta_g_gb</code></td>
+                <td>Polar solvation energy (kcal/mol)</td>
+            </tr>
+            <tr>
+                <td><code>status</code></td>
+                <td><code>success</code> or error message</td>
+            </tr>
+        </table>
+
+        <div class="callout">
+            <p><strong>Note:</strong> Batch processing is sequential—each ligand is processed one at a time.
+            However, AmberTools parallelizes internal calculations across CPU cores.</p>
+        </div>
+
+        <h3>Processing Details</h3>
+        <ul>
+            <li>Receptor topology is prepared once and validated via SHA256 hash</li>
+            <li>Each ligand is parameterized independently</li>
+            <li>Complex assembly and rescoring occur per-ligand</li>
+            <li>Failed ligands are logged but do not halt the batch</li>
+        </ul>
+
+        <hr>
+
+        <h2>Additional Commands</h2>
+        <p>
+            Rescore provides modular commands for advanced users who want fine-grained control over
+            each pipeline step. These are not required for typical use cases.
+        </p>
+
+        <table>
+            <tr>
+                <th>Command</th>
+                <th>Purpose</th>
+            </tr>
+            <tr>
+                <td><code>rescore validate</code></td>
+                <td>Validate protein-ligand complex structure</td>
+            </tr>
+            <tr>
+                <td><code>rescore prep-protein</code></td>
+                <td>Prepare receptor with pdb4amber + tleap</td>
+            </tr>
+            <tr>
+                <td><code>rescore parameterize</code></td>
+                <td>Parameterize ligand with GAFF2 + AM1-BCC</td>
+            </tr>
+            <tr>
+                <td><code>rescore assemble</code></td>
+                <td>Assemble protein-ligand complex topology</td>
+            </tr>
+            <tr>
+                <td><code>rescore run</code></td>
+                <td>Run MM/GBSA on pre-assembled complex</td>
+            </tr>
+        </table>
+
+        <p>For detailed help on any command:</p>
+        <pre><code>rescore &lt;command&gt; --help</code></pre>
+    </main>
+</body>
+</html>

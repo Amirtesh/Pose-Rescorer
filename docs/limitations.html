@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Limitations - Pose Rescorer</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <nav>
+        <ul>
+            <h1 style="font-size: 2.5rem;">Pose Rescorer <span class="version">v1.1</span></h1>
+            <li><a href="index.html">Overview</a></li>
+            <li><a href="install.html">Installation</a></li>
+            <li><a href="quickstart.html">Quickstart</a></li>
+            <li><a href="cli.html">CLI Reference</a></li>
+            <li><a href="limitations.html" class="active">Limitations</a></li>
+        </ul>
+    </nav>
+
+    <main>
+        <h1 style="font-size: 3.5rem;">Limitations</h1>
+        <p class="subtitle">Understanding what Pose Rescorer can and cannot do</p>
+
+        <h2>Methodological Limitations</h2>
+
+        <ol>
+            <li>
+                <h3>Single-Frame Approximation</h3>
+                <p>
+                    Rescore performs calculations on a single structure. It does not sample conformational space
+                    or account for protein-ligand dynamics. Real binding involves ensemble averaging over many
+                    conformations, which is not captured here.
+                </p>
+                <p><strong>Impact:</strong> Scores can be sensitive to the input structure. Small changes in ligand
+                pose or protein conformation can produce different energies.</p>
+            </li>
+
+            <li>
+                <h3>No Entropy Calculation</h3>
+                <p>
+                    The binding free energy is ΔG = ΔH − TΔS. Rescore computes ΔH (enthalpy) using molecular
+                    mechanics but <strong>does not compute ΔS</strong> (entropy). The reported ΔG<sub>bind</sub>
+                    implicitly assumes ΔS = 0.
+                </p>
+                <p><strong>Impact:</strong> True binding free energies include both enthalpic and entropic
+                contributions. Neglecting entropy can lead to large errors, especially for flexible ligands or
+                systems with significant conformational changes upon binding.</p>
+            </li>
+
+            <li>
+                <h3>Implicit Solvent Approximation</h3>
+                <p>
+                    Generalized Born (GB) and Poisson-Boltzmann (PB) models approximate solvent effects using
+                    continuum electrostatics. They do not represent explicit water molecules, hydrogen bonding
+                    networks, or desolvation effects accurately.
+                </p>
+                <p><strong>Impact:</strong> Systems where water-mediated interactions are critical may be poorly
+                represented. Explicit solvent MD simulations provide more accurate solvation modeling but are
+                computationally expensive.</p>
+            </li>
+
+            <li>
+                <h3>Force Field Limitations</h3>
+                <p>
+                    AMBER force fields (ff14SB, GAFF2) are parametrized for typical drug-like molecules and
+                    standard amino acids. They may not accurately represent:
+                </p>
+                <ul>
+                    <li>Unusual ligands (e.g., organometallics, boron-containing compounds)</li>
+                    <li>Modified amino acids or non-standard residues</li>
+                    <li>Covalent inhibitors or transition-state analogs</li>
+                    <li>Highly charged species or zwitterions</li>
+                </ul>
+            </li>
+        </ol>
+
+        <h2>Structural Requirements</h2>
+
+        <ol>
+            <li>
+                <h3>Protein Preparation</h3>
+                <ul>
+                    <li>The receptor must be a complete protein structure (no missing heavy atoms)</li>
+                    <li>Protonation states are inferred by <code>pdb4amber</code>—manual curation may be needed for histidines, cysteines, or other ionizable residues</li>
+                    <li>Waters, ions, and cofactors are removed during preparation</li>
+                    <li>Multi-chain complexes are supported but not validated extensively</li>
+                </ul>
+            </li>
+
+            <li>
+                <h3>Ligand Preparation</h3>
+                <ul>
+                    <li>The ligand must be provided as a MOL2 file with 3D coordinates</li>
+                    <li>Protonation state is taken from the input file—use tools like MolProbity or Epik to assign correct states</li>
+                    <li>Ligand must be a single molecule (no multi-component ligands)</li>
+                    <li>AM1-BCC charge calculation assumes neutral or singly charged molecules</li>
+                </ul>
+            </li>
+
+            <li>
+                <h3>Unsupported Systems</h3>
+                <p>Rescore <strong>cannot</strong> handle:</p>
+                <ul>
+                    <li>Metal cofactors (e.g., zinc fingers, heme groups)</li>
+                    <li>Covalent ligands</li>
+                    <li>DNA/RNA complexes</li>
+                    <li>Membrane proteins (no lipid bilayer support)</li>
+                </ul>
+            </li>
+        </ol>
+
+        <h2>Interpretation of Results</h2>
+
+        <ol>
+            <li>
+                <h3>Relative Ranking Only</h3>
+                <p>
+                    ΔG<sub>bind</sub> values are <strong>relative scores</strong> for ranking purposes. They should
+                    not be interpreted as experimental binding affinities (K<sub>d</sub>, K<sub>i</sub>, IC<sub>50</sub>).
+                </p>
+                <p><strong>Example:</strong> A ligand with ΔG = −30 kcal/mol is <em>likely</em> to bind more favorably
+                than one with ΔG = −20 kcal/mol, but the absolute values do not correspond to measured affinities.</p>
+            </li>
+
+            <li>
+                <h3>Lack of Error Bars</h3>
+                <p>
+                    Single-frame calculations provide no statistical uncertainty. There are no error bars or
+                    confidence intervals. Scores should be treated as point estimates with unknown precision.
+                </p>
+            </li>
+
+            <li>
+                <h3>Correlation with Experiment</h3>
+                <p>
+                    MM/GBSA scores do not reliably correlate with experimental binding affinities across diverse
+                    systems. The method works best for:
+                </p>
+                <ul>
+                    <li>Comparing structurally similar ligands</li>
+                    <li>Ranking poses for the same ligand</li>
+                    <li>Filtering large virtual screening libraries</li>
+                </ul>
+                <p>It works poorly for:</p>
+                <ul>
+                    <li>Predicting absolute K<sub>d</sub> or ΔG<sub>exp</sub></li>
+                    <li>Comparing chemically diverse compounds</li>
+                    <li>Systems with large conformational changes or allosteric effects</li>
+                </ul>
+            </li>
+        </ol>
+
+        <h2>Computational Considerations</h2>
+
+        <ol>
+            <li>
+                <h3>Performance</h3>
+                <p>
+                    A typical calculation for a ~300 residue protein and a small molecule takes on the order of minutes
+                    on modern hardware. Batch rescoring scales linearly with the number of ligands (no parallelization
+                    across ligands, but AmberTools parallelizes internal GB calculations).
+                </p>
+            </li>
+
+            <li>
+                <h3>Reproducibility</h3>
+                <p>
+                    Results are deterministic for the same input files. However, AM1-BCC charge calculations may
+                    have small numerical variations (±0.001 e) between runs, leading to ~1 kcal/mol differences
+                    in binding energy.
+                </p>
+            </li>
+
+            <li>
+                <h3>File Management</h3>
+                <p>
+                    Each ligand generates ~50-100 MB of output files (topologies, coordinates, logs). For large
+                    batches, ensure sufficient disk space.
+                </p>
+            </li>
+        </ol>
+
+        <h2>Appropriate Use Cases</h2>
+
+        <div class="callout">
+            <p><strong>When to use Rescore:</strong></p>
+            <ul>
+                <li>Post-processing docking results to improve pose ranking</li>
+                <li>Filtering virtual screening hits for synthesis prioritization</li>
+                <li>Comparing binding modes from different docking programs</li>
+                <li>Exploratory studies where speed is more important than precision</li>
+            </ul>
+        </div>
+
+        <div class="callout warning">
+            <p><strong>When NOT to use Rescore:</strong></p>
+            <ul>
+                <li>Reporting ΔG values in publications as experimental predictions</li>
+                <li>Building QSAR models without validation on external test sets</li>
+                <li>Predicting IC<sub>50</sub> or K<sub>d</sub> quantitatively</li>
+                <li>Studying systems where entropy, explicit water, or dynamics are critical</li>
+            </ul>
+        </div>
+
+        <h2>Alternative Methods</h2>
+        <p>
+            For more rigorous predictions, consider:
+        </p>
+        <ul>
+            <li><strong>Free energy perturbation (FEP):</strong> Alchemical method with explicit solvent and sampling (e.g., FEP+, OpenFE)</li>
+            <li><strong>Thermodynamic integration (TI):</strong> Similar to FEP but with different integration approach</li>
+            <li><strong>Metadynamics:</strong> Enhanced sampling for exploring free energy landscapes</li>
+            <li><strong>QM/MM calculations:</strong> Quantum mechanics for ligand binding site, MM for rest of protein</li>
+        </ul>
+
+        <h2>Best Practices</h2>
+        <ol>
+            <li><strong>Always validate</strong> docking poses visually before rescoring</li>
+            <li><strong>Use consistent protonation states</strong> across all ligands in a series</li>
+            <li><strong>Compare scores within a congeneric series</strong>, not across diverse scaffolds</li>
+            <li><strong>Report methods clearly</strong> if publishing: state that MM/GBSA is for relative ranking only</li>
+            <li><strong>Do not over-interpret absolute values</strong>—focus on rank order</li>
+        </ol>
+
+        <h2>Further Reading</h2>
+        <ul>
+            <li>Genheden & Ryde (2015) "The MM/PBSA and MM/GBSA methods to estimate ligand-binding affinities."
+                <em>Expert Opin. Drug Discov.</em> 10(5):449-461.</li>
+            <li>Wang et al. (2019) "End-Point Binding Free Energy Calculation with MM/PBSA and MM/GBSA: Strategies
+                and Applications in Drug Design." <em>Chem. Rev.</em> 119(16):9478-9508.</li>
+            <li>Tuccinardi (2021) "What is the current value of MM/PBSA and MM/GBSA methods in drug discovery?"
+                <em>Expert Opin. Drug Discov.</em> 16(11):1233-1237.</li>
+        </ul>
+    </main>
+</body>
+</html>

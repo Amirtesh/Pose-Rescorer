@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quickstart - Pose Rescorer</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <nav>
+        <ul>
+            <h1 style="font-size: 2.5rem;">Pose Rescorer <span class="version">v1.1</span></h1>
+            <li><a href="index.html">Overview</a></li>
+            <li><a href="install.html">Installation</a></li>
+            <li><a href="quickstart.html" class="active">Quickstart</a></li>
+            <li><a href="cli.html">CLI Reference</a></li>
+            <li><a href="limitations.html">Limitations</a></li>
+        </ul>
+    </nav>
+
+    <main>
+        <h1 style="font-size: 3.5rem;">Quickstart</h1>
+        <p class="subtitle">Minimal working example for post-docking rescoring</p>
+
+        <h2>Prerequisites</h2>
+        <p>You will need:</p>
+        <ul>
+            <li>A prepared receptor PDB file (protein only, no waters or ions)</li>
+            <li>A ligand MOL2 file with 3D coordinates (from docking)</li>
+        </ul>
+
+        <div class="callout warning">
+            <p><strong>Important:</strong> The ligand MOL2 must contain 3D coordinates. If you only have SMILES or
+            2D structures, use a tool like RDKit or OpenBabel to generate 3D conformers before rescoring.</p>
+        </div>
+
+        <h2>Example: Single Ligand Rescoring</h2>
+
+        <h3>Input Files</h3>
+        <p>Assume you have the following files:</p>
+        <pre><code>receptor.pdb    # Prepared protein structure (no waters)
+ligand.mol2     # Docked ligand with 3D coordinates</code></pre>
+
+        <h3>Command</h3>
+        <p>Run the integrated pipeline to rescore the ligand:</p>
+        <pre><code>rescore integrate \
+  --receptor receptor.pdb \
+  --ligand ligand.mol2 \
+  -o rescore_output/</code></pre>
+
+        <h3>Workflow</h3>
+        <p>Rescore will automatically:</p>
+        <ol>
+            <li>Prepare the receptor (pdb4amber + tleap with ff14SB)</li>
+            <li>Parameterize the ligand (GAFF2 + AM1-BCC charges via antechamber)</li>
+            <li>Assemble the protein-ligand complex</li>
+            <li>Validate the assembled structure</li>
+            <li>Run restrained energy minimization (removes docking clashes)</li>
+            <li>Compute MM/GBSA binding energy</li>
+        </ol>
+
+        <h3>Output</h3>
+        <p>The results are written to <code>rescore_output/</code>:</p>
+        <pre><code>rescore_output/
+├── protein/
+│   ├── protein.prmtop         # Receptor topology
+│   └── protein.inpcrd         # Receptor coordinates
+├── ligand/
+│   ├── ligand.mol2            # Parameterized ligand
+│   └── ligand.frcmod          # Force field modifications
+├── complex/
+│   ├── complex.prmtop         # Combined topology
+│   └── complex.inpcrd         # Combined coordinates
+└── rescore/
+    ├── minimization/
+    │   ├── minimized_complex.pdb      # Minimized structure
+    │   └── minimization_info.txt      # Minimization log
+    ├── rescore_output.dat     # Energy results
+    ├── rescore.in             # MMPBSA.py input
+    └── rescore.log            # Calculation log</code></pre>
+
+        <h3>Reading Results</h3>
+        <p>The binding energy is reported in <code>rescore/rescore_output.dat</code>:</p>
+        <pre><code>DELTA TOTAL    -26.65    0.00    0.00</code></pre>
+
+        <p>This line shows:</p>
+        <ul>
+            <li><strong>ΔG<sub>bind</sub>:</strong> -26.65 kcal/mol (total binding energy)</li>
+            <li><strong>Standard error:</strong> 0.00 (single frame, no statistics)</li>
+        </ul>
+
+        <div class="callout">
+            <p><strong>Interpretation:</strong> The value -26.65 kcal/mol is a <strong>relative score</strong> for
+            ranking purposes. It is <strong>not</strong> an experimental prediction of binding affinity.</p>
+        </div>
+
+        <h2>Disabling Minimization</h2>
+        <p>If you want to skip the minimization step and score the structure as-is:</p>
+        <pre><code>rescore integrate \
+  --receptor receptor.pdb \
+  --ligand ligand.mol2 \
+  -o rescore_output/ \
+  --no-minimize</code></pre>
+
+        <h2>Using Poisson-Boltzmann Instead of GB</h2>
+        <p>To use PB solvation (slower, not necessarily more accurate for single-frame):</p>
+        <pre><code>rescore integrate \
+  --receptor receptor.pdb \
+  --ligand ligand.mol2 \
+  -o rescore_output/ \
+  --method pb</code></pre>
+
+        <h2>Next Steps</h2>
+        <ul>
+            <li>For rescoring multiple ligands, see <a href="cli.html#batch">batch processing</a></li>
+            <li>For detailed command options, see the <a href="cli.html">CLI reference</a></li>
+            <li>For understanding what the scores mean, see <a href="limitations.html">limitations</a></li>
+        </ul>
+    </main>
+</body>
+</html>

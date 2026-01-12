@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pose Rescorer - Post-Docking MM/GBSA Rescoring</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <nav>
+        <ul>
+            <h1 style="font-size: 2.5rem;">Pose Rescorer <span class="version">v1.1</span></h1>
+            <li><a href="index.html" class="active">Overview</a></li>
+            <li><a href="install.html">Installation</a></li>
+            <li><a href="quickstart.html">Quickstart</a></li>
+            <li><a href="cli.html">CLI Reference</a></li>
+            <li><a href="limitations.html">Limitations</a></li>
+        </ul>
+    </nav>
+
+    <main>
+        <h1 style="font-size: 3.5rem;">Pose Rescorer <span class="version">v1.1</span></h1>
+        <p class="subtitle">Physics-based post-docking rescoring using MM/GBSA</p>
+
+        <h2>Overview</h2>
+        <p>
+            Rescore is a command-line tool for post-docking rescoring of protein-ligand complexes using
+            single-frame MM/GBSA calculations. It provides automated parameterization, complex assembly,
+            and energy calculations through a streamlined interface to AmberTools.
+        </p>
+
+        <div class="callout">
+            <p><strong>Purpose:</strong> Rescore performs <strong>relative ranking</strong> of docked poses or compound series.
+            It does not compute thermodynamically rigorous binding free energies.</p>
+        </div>
+
+        <h2>Scope</h2>
+        <p>This tool is designed for:</p>
+        <ul>
+            <li>Ranking docked ligand poses</li>
+            <li>Prioritizing compounds from virtual screening</li>
+            <li>Comparing binding modes qualitatively</li>
+            <li>High-throughput rescoring of multiple ligands against one receptor</li>
+        </ul>
+
+        <p>This tool is <strong>not</strong> designed for:</p>
+        <ul>
+            <li>Computing absolute binding free energies (ΔG)</li>
+            <li>Predicting IC50 or Ki values</li>
+            <li>Replacing rigorous alchemical free energy methods</li>
+            <li>Publication-quality thermodynamic predictions</li>
+        </ul>
+
+        <h2>Scientific Positioning</h2>
+        <p>
+            Rescore performs single-frame MM/GBSA calculations—a fast, approximate method for estimating
+            protein-ligand binding energies. The approach combines molecular mechanics force fields with
+            implicit solvent models.
+        </p>
+
+        <h3>What It Does</h3>
+        <ul>
+            <li>Parameterizes proteins with AMBER ff14SB force field</li>
+            <li>Parameterizes ligands with GAFF2 force field and AM1-BCC charges</li>
+            <li>Performs restrained energy minimization to remove docking clashes</li>
+            <li>Computes MM/GBSA binding energies using generalized Born implicit solvent</li>
+            <li>Reports ΔG<sub>bind</sub> from MM/GBSA without entropy (−TΔS omitted)</li>
+        </ul>
+
+        <h3>What It Does Not Do</h3>
+        <ul>
+            <li>Molecular dynamics simulations</li>
+            <li>Conformational sampling</li>
+            <li>Entropy calculations (−TΔS = 0 in this implementation)</li>
+            <li>Explicit solvent modeling</li>
+            <li>Metal cofactor parameterization</li>
+        </ul>
+
+        <h2>Methodology</h2>
+
+        <h3>Force Fields</h3>
+        <ul>
+            <li><strong>Protein:</strong> AMBER ff14SB</li>
+            <li><strong>Ligand:</strong> GAFF2 (General Amber Force Field 2)</li>
+            <li><strong>Charges:</strong> AM1-BCC (semi-empirical quantum mechanics)</li>
+        </ul>
+
+        <h3>Solvation Model</h3>
+        <ul>
+            <li><strong>Method:</strong> Generalized Born (GB, igb=5 OBC II)</li>
+            <li><strong>Salt concentration:</strong> 0.15 M (physiological)</li>
+            <li><strong>Note:</strong> Poisson-Boltzmann (PB) supported but not recommended for single-frame rescoring</li>
+        </ul>
+
+        <h3>Minimization Protocol</h3>
+        <p>
+            By default, Rescore performs restrained energy minimization before scoring to relax steric
+            clashes introduced by docking:
+        </p>
+        <ul>
+            <li><strong>Cycles:</strong> 100 (50 steepest descent + 50 conjugate gradient)</li>
+            <li><strong>Restraints:</strong> Protein backbone atoms (N, CA, C) restrained at 2.0 kcal/mol/Ų</li>
+            <li><strong>Free atoms:</strong> Ligand and protein side chains</li>
+            <li><strong>Solvation:</strong> GB implicit solvent with 12 Å cutoff</li>
+        </ul>
+
+        <div class="callout warning">
+            <p><strong>Important:</strong> The minimization step is <strong>not</strong> molecular dynamics.
+            It is a local energy minimization to prepare structures for scoring. The calculation remains
+            single-frame.</p>
+        </div>
+
+        <h2>Use Cases</h2>
+
+        <h3>Appropriate</h3>
+        <ul>
+            <li>Post-processing docking results for improved pose ranking</li>
+            <li>Filtering large virtual screening libraries</li>
+            <li>Comparing binding modes from different docking programs</li>
+            <li>Preliminary compound prioritization for synthesis or testing</li>
+        </ul>
+
+        <h3>Inappropriate</h3>
+        <ul>
+            <li>Reporting ΔG values as experimental predictions</li>
+            <li>Correlating scores with experimental binding affinities quantitatively</li>
+            <li>Using scores as training data for machine learning without validation</li>
+            <li>Replacing rigorous free energy calculations (FEP, TI, metadynamics)</li>
+        </ul>
+
+        <h2>Philosophy</h2>
+        <p>
+            Rescore is built on the principle that computational tools should be honest about their
+            limitations. MM/GBSA is a fast, approximate method—not a replacement for thermodynamic rigor.
+        </p>
+        <p>
+            This tool provides relative energies for ranking purposes. The absolute values have large
+            uncertainties and should not be interpreted as quantitative predictions of binding affinity.
+        </p>
+        <p>
+            For publication-quality binding free energy predictions, consider alchemical methods
+            (FEP, TI) or enhanced sampling techniques with explicit solvent.
+        </p>
+
+        <div class="callout">
+            <p><strong>Recommended reading:</strong> Genheden & Ryde (2015) "The MM/PBSA and MM/GBSA methods to
+            estimate ligand-binding affinities." <em>Expert Opin. Drug Discov.</em> 10(5):449-461.</p>
+        </div>
+    </main>
+</body>
+</html>

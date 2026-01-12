@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Installation - Pose Rescorer</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <nav>
+        <ul>
+            <h1 style="font-size: 2.5rem;">Pose Rescorer <span class="version">v1.1</span></h1>
+            <li><a href="index.html">Overview</a></li>
+            <li><a href="install.html" class="active">Installation</a></li>
+            <li><a href="quickstart.html">Quickstart</a></li>
+            <li><a href="cli.html">CLI Reference</a></li>
+            <li><a href="limitations.html">Limitations</a></li>
+        </ul>
+    </nav>
+
+    <main>
+        <h1 style="font-size: 3.5rem;">Installation</h1>
+        <p class="subtitle">Setting up Pose Rescorer with AmberTools via conda</p>
+
+        <h2>Requirements</h2>
+        <p>Rescore requires the following dependencies:</p>
+        <ul>
+            <li><strong>AmberTools</strong> 24.8 or later (provides MMPBSA.py, antechamber, tleap, sander, pdb4amber)</li>
+            <li><strong>Python</strong> 3.10 or later</li>
+            <li><strong>BioPython</strong> 1.86+</li>
+            <li><strong>Typer</strong> 0.21.1+ (CLI framework)</li>
+            <li><strong>Rich</strong> 13.7.1+ (colored terminal output)</li>
+            <li><strong>Loguru</strong> 0.7.3+ (logging)</li>
+        </ul>
+
+        <h2>Installation via Conda</h2>
+        <p>The recommended installation method uses conda to manage AmberTools and Python dependencies.</p>
+
+        <h3>Step 1: Clone Repository</h3>
+        <pre><code>git clone https://github.com/Amirtesh/Pose-Rescorer
+cd Pose-Rescorer</code></pre>
+
+        <h3>Step 2: Create Conda Environment</h3>
+        <p>The repository includes an <code>environment.yml</code> file with all dependencies:</p>
+        <pre><code>conda env create -f environment.yml
+conda activate pose-rescorer</code></pre>
+
+        <p>This creates an environment called <code>pose-rescorer</code> with:</p>
+        <ul>
+            <li>AmberTools from conda-forge</li>
+            <li>Python 3.10</li>
+            <li>All required Python packages</li>
+        </ul>
+
+        <h3>Step 3: Install Pose Rescorer</h3>
+        <p>Make sure you're in the Pose-Rescorer directory, then install the package in development mode:</p>
+        <pre><code>pip install -e .</code></pre>
+
+        <h3>Step 4: Verify Installation</h3>
+        <p>Test that the installation succeeded:</p>
+        <pre><code>rescore --version</code></pre>
+
+        <p>You should see:</p>
+        <pre><code>rescore version 1.1</code></pre>
+
+        <p>Verify that AmberTools commands are available:</p>
+        <pre><code>which MMPBSA.py
+which antechamber
+which sander</code></pre>
+
+        <h2>Manual Installation</h2>
+        <p>
+            If you prefer not to use the provided environment file, you can install dependencies manually.
+            Ensure AmberTools is installed and available in your PATH, then install Python dependencies:
+        </p>
+        <pre><code>pip install biopython typer rich loguru</code></pre>
+
+        <h2>System Requirements</h2>
+        <ul>
+            <li><strong>OS:</strong> Linux or macOS (Windows via WSL2)</li>
+            <li><strong>RAM:</strong> 4 GB minimum, 8+ GB recommended for larger systems</li>
+            <li><strong>Disk:</strong> 5 GB for AmberTools + conda environment</li>
+            <li><strong>CPU:</strong> Multi-core recommended (AmberTools parallelizes GB calculations)</li>
+        </ul>
+
+        <h2>Testing the Installation</h2>
+        <p>Run a quick validation to ensure everything works:</p>
+        <pre><code>rescore validate --help
+rescore integrate --help</code></pre>
+
+        <p>Both commands should display help text without errors.</p>
+
+        <h2>Troubleshooting</h2>
+
+        <h3>Command not found: rescore</h3>
+        <p>Ensure the conda environment is activated:</p>
+        <pre><code>conda activate pose-rescorer</code></pre>
+
+        <h3>MMPBSA.py not found</h3>
+        <p>Verify AmberTools installation:</p>
+        <pre><code>conda list ambertools</code></pre>
+        <p>If not installed, add it manually:</p>
+        <pre><code>conda install -c conda-forge ambertools</code></pre>
+
+        <h3>Import errors for Python packages</h3>
+        <p>Reinstall dependencies:</p>
+        <pre><code>pip install --upgrade biopython typer rich loguru</code></pre>
+
+        <div class="callout">
+            <p><strong>Note:</strong> AmberTools must be installed from conda-forge. Do not attempt to compile
+            from source unless you are familiar with Amber's build system.</p>
+        </div>
+    </main>
+</body>
+</html>
