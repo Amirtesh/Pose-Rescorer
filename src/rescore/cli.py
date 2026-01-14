@@ -777,6 +777,11 @@ def integrate(
         "--minimize/--no-minimize",
         help="Run restrained minimization before scoring (default: ON)",
     ),
+    plot: bool = typer.Option(
+        False,
+        "--plot",
+        help="Generate bar chart of score components (optional)",
+    ),
     verbose: bool = typer.Option(
         False,
         "--verbose",
@@ -997,6 +1002,20 @@ def integrate(
         if "DELTA_G_GB" in energies:
             console.print(f"  {delta_g_label}:    {energies['DELTA_G_GB']:>8.2f}")
         
+        # Generate plot if requested
+        if plot:
+            from rescore.plotting import plot_integrate_scores
+            console.print()
+            console.print("[bold cyan]Generating score component plot...[/bold cyan]")
+            ligand_name = ligand.stem
+            plot_integrate_scores(
+                energies=energies,
+                ligand_name=ligand_name,
+                output_path=rescore_dir,
+                method=method,
+            )
+            console.print(f"  ✓ Plot saved: {rescore_dir}/{ligand_name}_score_components.png", style="green")
+        
         console.print()
         console.print("[bold]Output Structure:[/bold]")
         console.print(f"  {output_dir}/")
@@ -1094,6 +1113,11 @@ def batch(
         "--minimize/--no-minimize",
         help="Run restrained minimization before scoring (default: ON)",
     ),
+    plot: bool = typer.Option(
+        False,
+        "--plot",
+        help="Generate bar chart comparing ligand scores (optional)",
+    ),
 ) -> None:
     """
     Batch rescoring for multiple ligands against one receptor.
@@ -1163,7 +1187,7 @@ def batch(
     console.print()
     
     try:
-        run_batch_rescore(
+        results = run_batch_rescore(
             receptor=receptor,
             ligands=ligands,
             output_dir=output_dir,
@@ -1173,6 +1197,18 @@ def batch(
         )
         
         console.print("[bold green]✓ Batch processing complete![/bold green]\n")
+        
+        # Generate plot if requested
+        if plot:
+            from rescore.plotting import plot_batch_scores
+            console.print("[bold cyan]Generating batch score comparison plot...[/bold cyan]")
+            plot_batch_scores(
+                results=results,
+                output_path=output_dir,
+                method=method,
+            )
+            console.print(f"  ✓ Plot saved: {output_dir}/batch_relative_scores.png", style="green")
+            console.print()
     
     except BatchError as e:
         console.print()
