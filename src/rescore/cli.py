@@ -1060,7 +1060,7 @@ def integrate(
                 ligand_name = ligand.stem
                 run_rps(
                     receptor_dir=protein_dir,
-                    ligand_mol2=ligand,
+                    parameterized_ligand_dir=ligand_dir,
                     ligand_name=ligand_name,
                     output_dir=output_dir,
                     n_replicates=rps_replicates,

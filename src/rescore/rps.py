@@ -10,6 +10,13 @@ CRITICAL SCOPE:
 RPS evaluates how small coordinate perturbations affect single-frame MM/GBSA scores.
 It provides uncertainty bounds for a fixed docking-derived pose.
 
+HARD CHEMISTRY-FROZEN GUARANTEE:
+- antechamber is NEVER invoked during RPS
+- Ligand charges are frozen (AM1-BCC from main workflow)
+- Ligand atom types are frozen (GAFF2 from main workflow)
+- Force field parameters are frozen (frcmod from main workflow)
+- ONLY coordinates (x,y,z) are perturbed with Gaussian noise
+
 Use for:
 - Quantifying score stability
 - Understanding numerical sensitivity
@@ -38,7 +45,6 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import seaborn as sns
 
-from rescore.parameterization.ligand import parameterize_ligand
 from rescore.parameterization.complex import prepare_complex
 from rescore.calculation import run_rescore
 
@@ -159,7 +165,7 @@ def perturb_ligand_coordinates(
 
 def run_single_perturbation(
     receptor_dir: Path,
-    ligand_mol2: Path,
+    parameterized_ligand_dir: Path,
     replicate_id: int,
     sigma: float,
     ligand_name: str,
@@ -170,15 +176,25 @@ def run_single_perturbation(
     """
     Run complete workflow for a single perturbation replicate.
     
+    CRITICAL: RPS perturbs coordinates only; ligand chemistry is fixed by design.
+    This function does NOT re-parameterize the ligand. It uses the pre-computed
+    GAFF2 atom types, AM1-BCC charges, and frcmod parameters from the main workflow.
+    
+    HARD GUARD: antechamber is NEVER invoked in RPS mode.
+    - Charges are frozen (from original AM1-BCC calculation)
+    - Atom types are frozen (from original GAFF2 assignment)
+    - Force field parameters are frozen (from original frcmod)
+    - Only coordinates (x,y,z) are perturbed
+    
     Steps:
-    1. Perturb ligand coordinates
-    2. Parameterize perturbed ligand
-    3. Assemble complex
+    1. Copy pre-parameterized ligand.mol2 and perturb only x/y/z coordinates
+    2. Copy original ligand.frcmod (chemistry frozen)
+    3. Assemble complex using perturbed coordinates + fixed chemistry
     4. Run MM/GBSA scoring
     
     Args:
         receptor_dir: Directory containing prepared receptor
-        ligand_mol2: Path to original ligand MOL2
+        parameterized_ligand_dir: Directory with ligand.mol2 and ligand.frcmod (pre-parameterized)
         replicate_id: Perturbation replicate index
         sigma: Perturbation magnitude (Angstroms)
         ligand_name: Ligand name for seed generation
@@ -205,16 +221,41 @@ def run_single_perturbation(
     if not protein_link.exists():
         protein_link.symlink_to(receptor_dir.resolve(), target_is_directory=True)
     
-    # Step 1: Perturb ligand
+    # Step 1: Perturb ligand coordinates (chemistry frozen)
+    # RPS perturbs coordinates only; ligand chemistry is fixed by design.
+    parameterized_mol2 = parameterized_ligand_dir / "ligand.mol2"
     perturbed_mol2 = replicate_dir / "ligand_perturbed.mol2"
-    perturb_ligand_coordinates(ligand_mol2, perturbed_mol2, sigma, seed)
+    perturb_ligand_coordinates(parameterized_mol2, perturbed_mol2, sigma, seed)
     
-    # Step 2: Parameterize perturbed ligand
+    # Step 2: Copy pre-parameterized ligand files (NO re-parameterization)
+    # Use the original GAFF2 atom types, AM1-BCC charges, and frcmod
+    # HARD GUARD: antechamber must NEVER be invoked in RPS mode
     ligand_dir = replicate_dir / "ligand"
-    parameterize_ligand(
-        ligand_mol2=perturbed_mol2,
-        output_dir=ligand_dir,
-    )
+    ligand_dir.mkdir(parents=True, exist_ok=True)
+    
+    import shutil
+    # Copy perturbed MOL2 with original chemistry
+    shutil.copy2(perturbed_mol2, ligand_dir / "ligand.mol2")
+    
+    # Copy original frcmod (chemistry frozen)
+    original_frcmod = parameterized_ligand_dir / "ligand.frcmod"
+    if not original_frcmod.exists():
+        raise RPSError(
+            f"CRITICAL: Missing ligand.frcmod in {parameterized_ligand_dir}\n"
+            "RPS requires pre-parameterized ligand. Run main workflow first."
+        )
+    shutil.copy2(original_frcmod, ligand_dir / "ligand.frcmod")
+    
+    # HARD GUARD: Verify chemistry files exist (copied, not generated)
+    assert (ligand_dir / "ligand.mol2").exists(), "ligand.mol2 copy failed"
+    assert (ligand_dir / "ligand.frcmod").exists(), "ligand.frcmod copy failed"
+    
+    # HARD GUARD: Verify frcmod is the original (same size = not regenerated)
+    if (ligand_dir / "ligand.frcmod").stat().st_size != original_frcmod.stat().st_size:
+        raise RPSError(
+            "CRITICAL: ligand.frcmod was modified during RPS\n"
+            "This indicates antechamber was invoked, which violates RPS chemistry-frozen principle."
+        )
     
     # Step 3: Assemble complex
     complex_dir = replicate_dir / "complex"
@@ -385,7 +426,7 @@ def plot_rps_distribution(
 
 def run_rps(
     receptor_dir: Path,
-    ligand_mol2: Path,
+    parameterized_ligand_dir: Path,
     ligand_name: str,
     output_dir: Path,
     n_replicates: int = 10,
@@ -401,9 +442,15 @@ def run_rps(
     - This is NOT conformational sampling
     - This IS numerical sensitivity analysis
     
+    CRITICAL METHODOLOGY:
+    - RPS perturbs coordinates only; ligand chemistry is fixed by design
+    - Uses pre-parameterized ligand.mol2 and ligand.frcmod from main workflow
+    - NO re-parameterization per replicate (antechamber NOT called)
+    - GAFF2 atom types, AM1-BCC charges, and frcmod are frozen
+    
     Args:
         receptor_dir: Directory containing prepared receptor
-        ligand_mol2: Path to ligand MOL2 file
+        parameterized_ligand_dir: Directory with pre-parameterized ligand.mol2 and ligand.frcmod
         ligand_name: Name of ligand (for output files)
         output_dir: Output directory for RPS results
         n_replicates: Number of perturbation replicates
@@ -459,7 +506,7 @@ def run_rps(
             try:
                 energies = run_single_perturbation(
                     receptor_dir=receptor_dir,
-                    ligand_mol2=ligand_mol2,
+                    parameterized_ligand_dir=parameterized_ligand_dir,
                     replicate_id=replicate_id,
                     sigma=sigma,
                     ligand_name=ligand_name,
