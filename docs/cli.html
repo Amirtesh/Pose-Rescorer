@@ -77,6 +77,21 @@
                 <td>False</td>
                 <td>Skip pdb4amber preprocessing (not recommended)</td>
             </tr>
+            <tr>
+                <td><code>--plot</code></td>
+                <td>False</td>
+                <td>Generate bar chart of score components</td>
+            </tr>
+            <tr>
+                <td><code>--rps-replicates</code></td>
+                <td>None</td>
+                <td>Enable Rapid Perturbation Sampling with N replicates (diagnostic mode)</td>
+            </tr>
+            <tr>
+                <td><code>--rps-sigma</code></td>
+                <td>0.2</td>
+                <td>RPS perturbation magnitude in Angstroms</td>
+            </tr>
         </table>
 
         <h3>Example</h3>
@@ -85,6 +100,13 @@ rescore integrate \
   --receptor protein.pdb \
   --ligand ligand.mol2 \
   -o output/
+
+# With uncertainty quantification (RPS)
+rescore integrate \
+  --receptor protein.pdb \
+  --ligand ligand.mol2 \
+  -o output/ \
+  --rps-replicates 20
 
 # PB method without minimization
 rescore integrate \
@@ -109,11 +131,99 @@ rescore integrate \
 ├── protein/         # Receptor topology files
 ├── ligand/          # Ligand force field files
 ├── complex/         # Combined topology
-└── rescore/         # Energy results
-    ├── minimization/
-    │   └── minimized_complex.pdb
-    ├── rescore_output.dat
-    └── rescore.log</code></pre>
+├── rescore/         # Energy results
+│   ├── minimization/
+│   │   └── minimized_complex.pdb
+│   ├── rescore_output.dat
+│   └── rescore.log
+└── rps_analysis/    # RPS results (if --rps-replicates used)
+    ├── replicate_001/
+    ├── replicate_002/
+    ├── ligand_rps_replicates.csv
+    ├── ligand_rps_summary.csv
+    └── ligand_rps_distribution.png</code></pre>
+
+        <hr>
+
+        <h2 id="rps">Rapid Perturbation Sampling (RPS)</h2>
+        <p>
+            RPS is an <strong>optional diagnostic feature</strong> available only in <code>rescore integrate</code> mode.
+            It quantifies numerical sensitivity of single-frame MM/GBSA scores to small coordinate perturbations.
+        </p>
+
+        <h3>What RPS Does</h3>
+        <ul>
+            <li>Generates N perturbed copies of the ligand by adding Gaussian noise (default σ = 0.2 Å)</li>
+            <li>Runs the complete workflow (parameterization → assembly → minimization → scoring) for each perturbation</li>
+            <li>Computes statistics: mean score, standard deviation, 95% confidence interval, coefficient of variation</li>
+            <li>Classifies stability heuristically: HIGH (&lt;5% CV), MODERATE (5-15% CV), LOW (&gt;15% CV)</li>
+            <li>Outputs CSV files with per-replicate and summary statistics</li>
+            <li>Generates violin + boxplot visualization</li>
+        </ul>
+
+        <h3>What RPS Is NOT</h3>
+        <div class="warning-box">
+            <strong>⚠ CRITICAL:</strong> RPS is <strong>not molecular dynamics</strong>, <strong>not conformational sampling</strong>,
+            and <strong>not pose optimization</strong>. It is <strong>numerical sensitivity analysis</strong> for a fixed docking-derived pose.
+            Use it for uncertainty quantification only, not for ensemble averaging or thermodynamic sampling.
+        </div>
+
+        <h3>Perturbation Protocol</h3>
+        <ul>
+            <li>Only ligand coordinates are perturbed (protein remains fixed)</li>
+            <li>Perturbations: x_new = x_original + Normal(0, σ) applied independently to x, y, z</li>
+            <li>Each atom gets independent random perturbation</li>
+            <li>Bonding, atom types, and connectivity are preserved</li>
+            <li>Deterministic seeds ensure reproducibility (same ligand + replicate → identical perturbation)</li>
+        </ul>
+
+        <h3>Usage Example</h3>
+        <pre><code># Run with 20 perturbation replicates
+rescore integrate \
+  --receptor protein.pdb \
+  --ligand ligand.mol2 \
+  -o output/ \
+  --rps-replicates 20
+
+# Custom perturbation magnitude
+rescore integrate \
+  --receptor protein.pdb \
+  --ligand ligand.mol2 \
+  -o output/ \
+  --rps-replicates 20 \
+  --rps-sigma 0.3</code></pre>
+
+        <h3>RPS Outputs</h3>
+        <table>
+            <tr>
+                <th>File</th>
+                <th>Description</th>
+            </tr>
+            <tr>
+                <td><code>*_rps_replicates.csv</code></td>
+                <td>Per-replicate scores (ligand, replicate_id, score)</td>
+            </tr>
+            <tr>
+                <td><code>*_rps_summary.csv</code></td>
+                <td>Summary statistics (mean, std, CI, CV, stability)</td>
+            </tr>
+            <tr>
+                <td><code>*_rps_distribution.png</code></td>
+                <td>Violin + boxplot visualization</td>
+            </tr>
+        </table>
+
+        <h3>Interpretation Guidelines</h3>
+        <ul>
+            <li><strong>Low CV (&lt;5%):</strong> Score is stable, robust to coordinate uncertainty</li>
+            <li><strong>Moderate CV (5-15%):</strong> Score has moderate sensitivity to perturbations</li>
+            <li><strong>High CV (&gt;15%):</strong> Score is sensitive to atomic details, interpret with caution</li>
+        </ul>
+
+        <p class="note">
+            <strong>Note:</strong> RPS is disabled for <code>rescore batch</code>. If you attempt to use RPS in batch mode,
+            an error will be raised. RPS is designed for ligand-specific diagnostic analysis only.
+        </p>
 
         <hr>
 
@@ -168,6 +278,11 @@ rescore integrate \
                 <td>False</td>
                 <td>Skip pdb4amber preprocessing of receptor</td>
             </tr>
+            <tr>
+                <td><code>--plot</code></td>
+                <td>False</td>
+                <td>Generate bar chart comparing ligand scores</td>
+            </tr>
         </table>
 
         <h3>Example</h3>
@@ -176,6 +291,13 @@ rescore batch \
   --receptor protein.pdb \
   --ligands ligands_directory/ \
   -o batch_results/
+
+# With score comparison plot
+rescore batch \
+  --receptor protein.pdb \
+  --ligands ligands_directory/ \
+  -o batch_results/ \
+  --plot
 
 # Single method change for all ligands
 rescore batch \

@@ -118,6 +118,7 @@
             <li>Filtering large virtual screening libraries</li>
             <li>Comparing binding modes from different docking programs</li>
             <li>Preliminary compound prioritization for synthesis or testing</li>
+            <li>Uncertainty quantification via Rapid Perturbation Sampling (RPS)</li>
         </ul>
 
         <h3>Inappropriate</h3>
@@ -127,6 +128,26 @@
             <li>Using scores as training data for machine learning without validation</li>
             <li>Replacing rigorous free energy calculations (FEP, TI, metadynamics)</li>
         </ul>
+
+        <h2>Optional Features</h2>
+
+        <h3>Plotting</h3>
+        <p>
+            Pose-Rescorer optionally generates bar plots summarizing single-frame MM/GBSA or MM/PBSA scores
+            to provide a visual aid for result inspection; these plots are descriptive only and do not alter
+            score interpretation.
+        </p>
+
+        <h3>Rapid Perturbation Sampling (RPS)</h3>
+        <p>
+            RPS is an optional diagnostic feature that quantifies numerical sensitivity of single-frame scores
+            to small coordinate perturbations. It generates N perturbed copies of a ligand (via Gaussian noise,
+            default σ = 0.2 Å), rescores each, and reports statistics (mean, std, CV, 95% CI).
+        </p>
+        <p>
+            <strong>Critical:</strong> RPS is <strong>not</strong> molecular dynamics, conformational sampling,
+            or thermodynamic ensemble averaging. It is numerical sensitivity analysis for uncertainty quantification only.
+        </p>
 
         <h2>Philosophy</h2>
         <p>

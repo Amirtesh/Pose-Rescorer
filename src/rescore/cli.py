@@ -782,6 +782,16 @@ def integrate(
         "--plot",
         help="Generate bar chart of score components (optional)",
     ),
+    rps_replicates: Optional[int] = typer.Option(
+        None,
+        "--rps-replicates",
+        help="Enable Rapid Perturbation Sampling (RPS) with N replicates for uncertainty quantification",
+    ),
+    rps_sigma: float = typer.Option(
+        0.2,
+        "--rps-sigma",
+        help="RPS perturbation magnitude in Angstroms (default: 0.2)",
+    ),
     verbose: bool = typer.Option(
         False,
         "--verbose",
@@ -820,12 +830,25 @@ def integrate(
     - Optional minimization relaxes clashes (NOT MD)
     - Fail-fast on any error (no silent fixes)
 
+    OPTIONAL DIAGNOSTICS:
+    - RPS (Rapid Perturbation Sampling): Uncertainty quantification
+      Use --rps-replicates N to run N coordinate perturbations
+      Provides score stability metrics and confidence intervals
+      WARNING: RPS is NOT MD, conformational sampling, or pose optimization
+
     Examples:
         # Basic workflow
         rescore integrate \
           --receptor receptor.pdb \
           --ligand ligand.mol2 \
           -o results/
+
+        # With RPS uncertainty analysis
+        rescore integrate \
+          --receptor receptor.pdb \
+          --ligand ligand.mol2 \
+          -o results/ \
+          --rps-replicates 20
 
         # Skip validation (faster, but risky)
         rescore integrate \
@@ -1016,6 +1039,41 @@ def integrate(
             )
             console.print(f"  ✓ Plot saved: {rescore_dir}/{ligand_name}_score_components.png", style="green")
         
+        # Run RPS if requested
+        if rps_replicates is not None:
+            from rescore.rps import run_rps, RPSError
+            
+            if rps_replicates < 2:
+                console.print()
+                console.print("[bold red]✗ Invalid RPS replicates[/bold red]")
+                console.print("RPS requires at least 2 replicates for statistical analysis")
+                raise typer.Exit(code=1)
+            
+            console.print()
+            console.print("=" * 60)
+            console.print("[bold yellow]⚠ RAPID PERTURBATION SAMPLING (RPS)[/bold yellow]")
+            console.print("=" * 60)
+            console.print("[dim]This is a DIAGNOSTIC feature for uncertainty quantification[/dim]")
+            console.print()
+            
+            try:
+                ligand_name = ligand.stem
+                run_rps(
+                    receptor_dir=protein_dir,
+                    ligand_mol2=ligand,
+                    ligand_name=ligand_name,
+                    output_dir=output_dir,
+                    n_replicates=rps_replicates,
+                    sigma=rps_sigma,
+                    method=method,
+                    minimize=minimize,
+                )
+            except RPSError as e:
+                console.print()
+                console.print("[bold red]✗ RPS analysis failed[/bold red]")
+                console.print(str(e))
+                raise typer.Exit(code=1)
+        
         console.print()
         console.print("[bold]Output Structure:[/bold]")
         console.print(f"  {output_dir}/")
@@ -1023,6 +1081,8 @@ def integrate(
         console.print(f"  ├── ligand/     (ligand parameters)")
         console.print(f"  ├── complex/    (combined topology)")
         console.print(f"  └── rescore/     (rescoring results)")
+        if rps_replicates is not None:
+            console.print(f"  └── rps_analysis/ (RPS diagnostic results)")
         console.print()
         console.print("[yellow]⚠ CRITICAL REMINDER:[/yellow]")
         console.print("[dim]  This is POST-DOCKING RESCORING for relative ranking[/dim]")
