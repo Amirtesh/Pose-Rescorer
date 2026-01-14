@@ -154,12 +154,19 @@ rescore integrate \
         <h3>What RPS Does</h3>
         <ul>
             <li>Generates N perturbed copies of the ligand by adding Gaussian noise (default σ = 0.2 Å)</li>
-            <li>Runs the complete workflow (parameterization → assembly → minimization → scoring) for each perturbation</li>
+            <li>Runs the complete workflow (coordinate perturbation → assembly → minimization → scoring) for each perturbation</li>
             <li>Computes statistics: mean score, standard deviation, 95% confidence interval, coefficient of variation</li>
             <li>Classifies stability heuristically: HIGH (&lt;5% CV), MODERATE (5-15% CV), LOW (&gt;15% CV)</li>
             <li>Outputs CSV files with per-replicate and summary statistics</li>
             <li>Generates violin + boxplot visualization</li>
         </ul>
+
+        <div class="warning-box">
+            <strong>⚠ Chemistry-Frozen Guarantee:</strong> Ligand parameterization (antechamber with AM1-BCC) 
+            runs <strong>only once</strong> during the main workflow. Each RPS replicate uses the <strong>same charges, 
+            atom types, and force field parameters</strong>. Only atomic coordinates are perturbed. This ensures 
+            that observed score variations are due to geometry alone, not charge fluctuations.
+        </div>
 
         <h3>What RPS Is NOT</h3>
         <div class="warning-box">
@@ -170,11 +177,13 @@ rescore integrate \
 
         <h3>Perturbation Protocol</h3>
         <ul>
-            <li>Only ligand coordinates are perturbed (protein remains fixed)</li>
+            <li><strong>Coordinates only:</strong> Only ligand x/y/z coordinates are perturbed (protein remains fixed)</li>
+            <li><strong>Chemistry frozen:</strong> Charges, atom types, and frcmod parameters copied from main workflow</li>
             <li>Perturbations: x_new = x_original + Normal(0, σ) applied independently to x, y, z</li>
             <li>Each atom gets independent random perturbation</li>
             <li>Bonding, atom types, and connectivity are preserved</li>
             <li>Deterministic seeds ensure reproducibility (same ligand + replicate → identical perturbation)</li>
+            <li><strong>No re-parameterization:</strong> antechamber is NOT invoked per replicate</li>
         </ul>
 
         <h3>Usage Example</h3>

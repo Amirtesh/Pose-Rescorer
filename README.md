@@ -266,6 +266,12 @@ pipeline_output/
 **Rapid Perturbation Sampling (RPS):**
 Optional diagnostic feature for uncertainty quantification. Generates N perturbed ligand structures (Gaussian noise, σ = 0.2 Å default), rescores each, and reports statistics (mean, std, CV, 95% CI).
 
+**Chemistry-Frozen Guarantee:**
+- Ligand is parameterized **only once** in the main workflow (GAFF2 + AM1-BCC)
+- Each RPS replicate **uses the same charges, atom types, and force field parameters**
+- **antechamber is NOT run per replicate** - only coordinates are perturbed
+- This ensures chemistry is frozen and only geometry varies
+
 ```bash
 # With RPS uncertainty analysis
 rescore integrate \
