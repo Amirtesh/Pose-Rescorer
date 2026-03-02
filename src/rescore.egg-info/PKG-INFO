@@ -51,6 +51,8 @@ The MM/GBSA scores provide **relative binding strength** for comparison within a
 - **Automated parameterization** with GAFF2 + AM1-BCC charges
 - **Protein preparation** with pdb4amber + ff14SB force field
 - **Structure validation** with chemistry checks
+- **Optional plotting** for score visualization
+- **Rapid Perturbation Sampling (RPS)** for uncertainty quantification
 
 ### Force Fields & Methods
 - **Protein**: AMBER ff14SB
@@ -79,6 +81,10 @@ The MM/GBSA scores provide **relative binding strength** for comparison within a
 - **Typer** 0.21.1+ (CLI framework)
 - **Rich** 13.7.1+ (colored output)
 - **Loguru** 0.7.3+ (logging)
+- **Matplotlib** 3.10+ (plotting)
+- **Seaborn** 0.13+ (plotting)
+- **Pandas** 2.3+ (RPS data handling)
+- **NumPy** 2.2+ (numerical operations)
 
 ## 🔧 Installation
 
@@ -255,15 +261,22 @@ pipeline_output/
 ├── protein/         # Receptor parameters
 ├── ligand/          # Ligand parameters
 ├── complex/         # Combined topology
-└── rescore/         # Rescoring results (same folder name for GB/PB)
-    ├── minimization/        # Minimization outputs (if --minimize)
-    │   ├── minimized_complex.pdb      # Minimized structure for visualization
-    │   ├── minimized.inpcrd           # Minimized coordinates
-    │   ├── minimization_info.txt      # Detailed sander output
-    │   └── minimization.in            # Sander input file
-    ├── rescore_output.dat   # Energy results (GB)
-    ├── rescore.in           # MMPBSA.py input
-    └── rescore.log          # Detailed calculation log
+├── rescore/         # Rescoring results (same folder name for GB/PB)
+│   ├── minimization/        # Minimization outputs (if --minimize)
+│   │   ├── minimized_complex.pdb      # Minimized structure for visualization
+│   │   ├── minimized.inpcrd           # Minimized coordinates
+│   │   ├── minimization_info.txt      # Detailed sander output
+│   │   └── minimization.in            # Sander input file
+│   ├── rescore_output.dat   # Energy results (GB)
+│   ├── rescore.in           # MMPBSA.py input
+│   ├── rescore.log          # Detailed calculation log
+│   └── ligand_score_components.png    # Score plot (if --plot)
+└── rps_analysis/    # RPS results (if --rps-replicates used)
+    ├── replicate_001/
+    ├── replicate_002/
+    ├── ligand_rps_replicates.csv
+    ├── ligand_rps_summary.csv
+    └── ligand_rps_distribution.png
 ```
 
 **Options:**
@@ -271,6 +284,29 @@ pipeline_output/
 - `--skip-pdb4amber` - Skip pdb4amber processing
 - `--no-minimize` - Skip restrained minimization (default: ON)
 - `--method gb|pb` - Solvation method (default: gb)
+- `--plot` - Generate bar chart of score components
+- `--rps-replicates N` - Enable Rapid Perturbation Sampling with N replicates
+- `--rps-sigma FLOAT` - RPS perturbation magnitude in Angstroms (default: 0.2)
+
+**Rapid Perturbation Sampling (RPS):**
+Optional diagnostic feature for uncertainty quantification. Generates N perturbed ligand structures (Gaussian noise, σ = 0.2 Å default), rescores each, and reports statistics (mean, std, CV, 95% CI).
+
+**Chemistry-Frozen Guarantee:**
+- Ligand is parameterized **only once** in the main workflow (GAFF2 + AM1-BCC)
+- Each RPS replicate **uses the same charges, atom types, and force field parameters**
+- **antechamber is NOT run per replicate** - only coordinates are perturbed
+- This ensures chemistry is frozen and only geometry varies
+
+```bash
+# With RPS uncertainty analysis
+rescore integrate \
+  --receptor receptor.pdb \
+  --ligand ligand.mol2 \
+  -o pipeline_output/ \
+  --rps-replicates 20
+```
+
+**Critical:** RPS is NOT molecular dynamics, conformational sampling, or pose optimization. It is numerical sensitivity analysis for uncertainty quantification only.
 
 ---
 
@@ -315,6 +351,14 @@ ligand_name,delta_g_bind,delta_h,delta_g_pb,status   # PB runs
 - All ligands must be in **MOL2 format**
 - Ligands should be pre-docked or have coordinates
 - Chemistry consistency enforced (same force field for all)
+
+**Options:**
+- `--method gb|pb` - Solvation method (default: gb)
+- `--minimize / --no-minimize` - Minimization control (default: ON)
+- `--plot` - Generate bar chart comparing ligand scores
+- `--skip-pdb4amber` - Skip receptor preprocessing
+
+**Note:** RPS (Rapid Perturbation Sampling) is NOT available in batch mode. Use `rescore integrate` for ligand-specific diagnostic analysis.
 
 ---
 

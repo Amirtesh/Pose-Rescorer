@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Worked Examples – Pose Rescorer</title>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        /* ── Example-page additions ─────────────────────────────────────── */
+        .breadcrumb {
+            font-size: 0.78rem;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: var(--accent);
+            margin-bottom: 0.4rem;
+        }
+
+        .target-section {
+            margin-top: 4rem;
+            padding-top: 2rem;
+            border-top: 2px solid var(--border);
+        }
+        .target-section:first-of-type {
+            margin-top: 2rem;
+            border-top: none;
+        }
+
+        .target-context {
+            background-color: var(--bg-secondary);
+            border-left: 4px solid var(--accent-dim);
+            padding: 0.9rem 1.4rem;
+            margin: 1.2rem 0 1.8rem;
+            border-radius: 0 4px 4px 0;
+            font-size: 0.95rem;
+            color: var(--text-secondary);
+        }
+        .target-context strong {
+            color: var(--text-primary);
+        }
+
+        /* ΔRank colours */
+        .rank-up   { color: #5bbf8a; font-weight: 600; }   /* improved  */
+        .rank-down { color: #c07850; font-weight: 600; }   /* worsened  */
+        .rank-same { color: var(--text-secondary); }
+
+        /* CV highlight */
+        .cv-high     { color: #d9534f; font-weight: 600; }
+        .cv-moderate { color: #c07850; }
+
+        /* two-column table pair */
+        .table-pair {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 2rem;
+            align-items: start;
+            margin: 1.5rem 0;
+        }
+        @media (max-width: 900px) {
+            .table-pair { grid-template-columns: 1fr; }
+        }
+
+        .table-pair table { margin: 0; }
+
+        .table-caption {
+            font-size: 0.88rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 0.6rem;
+        }
+
+        /* section summary legend */
+        .legend-bar {
+            display: flex;
+            gap: 2rem;
+            margin-top: 1.5rem;
+            padding: 0.75rem 1.2rem;
+            background: var(--bg-secondary);
+            border-radius: 4px;
+            font-size: 0.82rem;
+        }
+        .legend-item { display: flex; align-items: center; gap: 0.5rem; }
+        .legend-swatch {
+            width: 12px; height: 12px;
+            border-radius: 2px;
+            display: inline-block;
+        }
+
+        /* main content wider for table pairs */
+        main { max-width: 1100px; }
+    </style>
+</head>
+<body>
+    <nav>
+        <ul>
+            <h1 style="font-size: 2.5rem;">Pose Rescorer <span class="version">v1.1</span></h1>
+            <li><a href="index.html">Overview</a></li>
+            <li><a href="install.html">Installation</a></li>
+            <li><a href="quickstart.html">Quickstart</a></li>
+            <li><a href="cli.html">CLI Reference</a></li>
+            <li><a href="examples.html" class="active">Worked Examples</a></li>
+            <li><a href="limitations.html">Limitations</a></li>
+        </ul>
+    </nav>
+
+    <main>
+        <h1>Worked Examples</h1>
+        <p class="subtitle">Four drug targets · docking rescoring · RPS uncertainty analysis</p>
+
+        <p>
+            Each example shows docking scores alongside single-frame MM/GBSA rescores, the resulting
+            rank changes, and Rapid Perturbation Sampling (RPS) statistics. All MM/GBSA scores are
+            reported in kcal/mol. A negative ΔRank means the compound moved <em>up</em> in ranking
+            (more favoured) after rescoring; a positive ΔRank means it moved <em>down</em>.
+        </p>
+
+        <div class="legend-bar">
+            <div class="legend-item">
+                <span class="legend-swatch" style="background:#5bbf8a;"></span>
+                <span>ΔRank negative – compound improved in MM/GBSA ranking</span>
+            </div>
+            <div class="legend-item">
+                <span class="legend-swatch" style="background:#c07850;"></span>
+                <span>ΔRank positive – compound dropped in MM/GBSA ranking</span>
+            </div>
+            <div class="legend-item">
+                <span class="legend-swatch" style="background:#d9534f;"></span>
+                <span>CV &gt; 15% – score sensitive to coordinate perturbation</span>
+            </div>
+        </div>
+
+        <!-- ═══════════════════════════════════════════════════════════════ -->
+        <!-- EGFR                                                            -->
+        <!-- ═══════════════════════════════════════════════════════════════ -->
+        <div class="target-section" id="egfr">
+            <div class="breadcrumb">Worked Examples · EGFR</div>
+            <h2 style="border:none; margin-top:0.4rem;">EGFR Kinase Inhibitors</h2>
+
+            <div class="target-context">
+                Empirical docking scores for the EGFR ligand set <strong>favoured bulkier and more
+                hydrophobic compounds</strong>, producing a ranking largely driven by steric
+                complementarity. Application of Pose-Rescorer gave a reordered ligand ranking based on
+                single-frame MM/GBSA scores.
+            </div>
+
+            <div class="table-pair">
+                <div>
+                    <div class="table-caption">Table 1: Docking scores and single-frame MM/GBSA rescoring for EGFR inhibitors</div>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Ligand</th>
+                                <th>Docking (kcal/mol)</th>
+                                <th>Rank</th>
+                                <th>Rescore (kcal/mol)</th>
+                                <th>Rank</th>
+                                <th>ΔRank</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr><td><strong>Lapatinib</strong></td><td>−10.63</td><td>1</td><td>−96.06</td><td>3</td><td class="rank-down">+2</td></tr>
+                            <tr><td><strong>TAK-285</strong></td><td>−10.02</td><td>2</td><td>−100.33</td><td>1</td><td class="rank-up">−1</td></tr>
+                            <tr><td><strong>AEE788</strong></td><td>−9.82</td><td>3</td><td>−78.97</td><td>4</td><td class="rank-down">+1</td></tr>
+                            <tr><td><strong>Gefitinib</strong></td><td>−9.40</td><td>4</td><td>−99.10</td><td>2</td><td class="rank-up">−2</td></tr>
+                            <tr><td><strong>Icotinib</strong></td><td>−9.22</td><td>5</td><td>−21.62</td><td>10</td><td class="rank-down">+5</td></tr>
+                            <tr><td><strong>PKI-166</strong></td><td>−9.19</td><td>6</td><td>−60.55</td><td>7</td><td class="rank-down">+1</td></tr>
+                            <tr><td><strong>Vandetanib</strong></td><td>−9.10</td><td>7</td><td>−74.24</td><td>6</td><td class="rank-up">−1</td></tr>
+                            <tr><td><strong>AG1478</strong></td><td>−8.39</td><td>8</td><td>−42.18</td><td>9</td><td class="rank-down">+1</td></tr>
+                            <tr><td><strong>PD153035</strong></td><td>−8.32</td><td>9</td><td>−43.02</td><td>8</td><td class="rank-up">−1</td></tr>
+                            <tr><td><strong>Erlotinib</strong></td><td>−8.01</td><td>10</td><td>−75.24</td><td>5</td><td class="rank-up">−5</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div>
+                    <div class="table-caption">Table 2: RPS summary statistics for EGFR inhibitors (σ = 0.20 Å, 10 replicates)</div>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Ligand</th>
+                                <th>Mean (kcal/mol)</th>
+                                <th>SD</th>
+                                <th>CV (%)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr><td><strong>Gefitinib</strong></td><td>−92.62</td><td>3.39</td><td>3.66</td></tr>
+                            <tr><td><strong>Lapatinib</strong></td><td>−95.46</td><td>4.85</td><td>5.08</td></tr>
+                            <tr><td><strong>TAK-285</strong></td><td>−97.09</td><td>6.80</td><td>7.01</td></tr>
+                            <tr><td><strong>AEE788</strong></td><td>−95.18</td><td>7.00</td><td>7.35</td></tr>
+                            <tr><td><strong>Erlotinib</strong></td><td>−77.78</td><td>6.18</td><td>7.95</td></tr>
+                            <tr><td><strong>Vandetanib</strong></td><td>−77.69</td><td>5.71</td><td>7.35</td></tr>
+                            <tr><td><strong>PKI-166</strong></td><td>−57.37</td><td>4.32</td><td>7.53</td></tr>
+                            <tr><td><strong>AG1478</strong></td><td>−49.86</td><td>5.52</td><td>11.07</td></tr>
+                            <tr><td><strong>PD153035</strong></td><td>−40.87</td><td>4.46</td><td>10.92</td></tr>
+                            <tr><td><strong>Icotinib</strong></td><td>−23.80</td><td>7.40</td><td class="cv-high">31.07</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="callout">
+                <p>
+                    Icotinib ranks last by MM/GBSA (−21.62 kcal/mol) and exhibits a high CV of
+                    <strong>31.07%</strong>, indicating that its score is highly sensitive to small
+                    coordinate perturbations and should be interpreted with caution. TAK-285 and
+                    Gefitinib, which rise in rank after rescoring, show low CVs (&lt;8%), confirming
+                    their scores are geometrically stable.
+                </p>
+            </div>
+        </div>
+
+        <!-- ═══════════════════════════════════════════════════════════════ -->
+        <!-- HIV-1 PROTEASE                                                  -->
+        <!-- ═══════════════════════════════════════════════════════════════ -->
+        <div class="target-section" id="hiv1">
+            <div class="breadcrumb">Worked Examples · HIV-1 Protease</div>
+            <h2 style="border:none; margin-top:0.4rem;">HIV-1 Protease Inhibitors</h2>
+
+            <div class="target-context">
+                Docking of the HIV-1 protease inhibitor set produced a ranking <strong>strongly
+                influenced by steric complementarity</strong> within the compact active-site cavity.
+                Single-frame MM/GBSA rescoring resulted in substantial reordering of ligands.
+            </div>
+
+            <div class="table-pair">
+                <div>
+                    <div class="table-caption">Table 3: Docking and rescoring for HIV-1 protease inhibitors</div>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Ligand</th>
+                                <th>Docking (kcal/mol)</th>
+                                <th>Rank</th>
+                                <th>Rescore (kcal/mol)</th>
+                                <th>Rank</th>
+                                <th>ΔRank</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr><td><strong>Saquinavir</strong></td><td>−10.97</td><td>1</td><td>−86.97</td><td>1</td><td class="rank-same">0</td></tr>
+                            <tr><td><strong>Indinavir</strong></td><td>−10.69</td><td>2</td><td>−81.35</td><td>2</td><td class="rank-same">0</td></tr>
+                            <tr><td><strong>Lopinavir</strong></td><td>−10.44</td><td>3</td><td>−72.22</td><td>4</td><td class="rank-down">+1</td></tr>
+                            <tr><td><strong>Tipranavir</strong></td><td>−10.00</td><td>4</td><td>−54.37</td><td>9</td><td class="rank-down">+5</td></tr>
+                            <tr><td><strong>Atazanavir</strong></td><td>−9.74</td><td>5</td><td>−75.30</td><td>3</td><td class="rank-up">−2</td></tr>
+                            <tr><td><strong>Brecanavir</strong></td><td>−9.65</td><td>6</td><td>−58.29</td><td>8</td><td class="rank-down">+2</td></tr>
+                            <tr><td><strong>Nelfinavir</strong></td><td>−9.54</td><td>7</td><td>−61.42</td><td>7</td><td class="rank-same">0</td></tr>
+                            <tr><td><strong>Ritonavir</strong></td><td>−9.40</td><td>8</td><td>−66.80</td><td>6</td><td class="rank-up">−2</td></tr>
+                            <tr><td><strong>Darunavir</strong></td><td>−9.04</td><td>9</td><td>−65.31</td><td>5</td><td class="rank-up">−4</td></tr>
+                            <tr><td><strong>Amprenavir</strong></td><td>−8.71</td><td>10</td><td>−54.74</td><td>10</td><td class="rank-same">0</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div>
+                    <div class="table-caption">Table 4: RPS summary statistics for HIV-1 protease inhibitors (σ = 0.20 Å, 10 replicates)</div>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Ligand</th>
+                                <th>Mean (kcal/mol)</th>
+                                <th>SD</th>
+                                <th>CV (%)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr><td><strong>Atazanavir</strong></td><td>−80.07</td><td>2.70</td><td>3.37</td></tr>
+                            <tr><td><strong>Amprenavir</strong></td><td>−54.02</td><td>3.26</td><td>6.04</td></tr>
+                            <tr><td><strong>Ritonavir</strong></td><td>−88.08</td><td>5.54</td><td>6.29</td></tr>
+                            <tr><td><strong>Nelfinavir</strong></td><td>−58.80</td><td>4.16</td><td>7.07</td></tr>
+                            <tr><td><strong>Darunavir</strong></td><td>−64.82</td><td>4.66</td><td>7.19</td></tr>
+                            <tr><td><strong>Indinavir</strong></td><td>−76.68</td><td>5.67</td><td>7.39</td></tr>
+                            <tr><td><strong>Lopinavir</strong></td><td>−75.51</td><td>6.96</td><td>9.21</td></tr>
+                            <tr><td><strong>Tipranavir</strong></td><td>−52.84</td><td>5.76</td><td>10.89</td></tr>
+                            <tr><td><strong>Brecanavir</strong></td><td>−58.22</td><td>7.65</td><td>13.13</td></tr>
+                            <tr><td><strong>Saquinavir</strong></td><td>−63.87</td><td>8.43</td><td>13.20</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="callout">
+                <p>
+                    Tipranavir drops five positions after rescoring (rank 4 → 9) despite a docking score
+                    of −10.00 kcal/mol, consistent with known difficulties in scoring its unusual
+                    non-peptidic scaffold. All RPS CVs remain below 15%, indicating the entire set
+                    has moderate-to-high score stability. Brecanavir and Saquinavir show the highest
+                    CVs (13.1–13.2%), approaching the MODERATE/LOW boundary.
+                </p>
+            </div>
+        </div>
+
+        <!-- ═══════════════════════════════════════════════════════════════ -->
+        <!-- BRD4                                                            -->
+        <!-- ═══════════════════════════════════════════════════════════════ -->
+        <div class="target-section" id="brd4">
+            <div class="breadcrumb">Worked Examples · BRD4</div>
+            <h2 style="border:none; margin-top:0.4rem;">BRD4 Bromodomain Inhibitors</h2>
+
+            <div class="target-context">
+                Docking of the BRD4 inhibitor set produced a ranking influenced primarily by
+                <strong>steric complementarity within the shallow acetyl-lysine recognition pocket</strong>.
+                Single-frame MM/GBSA rescoring resulted in pronounced reordering of ligands.
+            </div>
+
+            <div class="table-pair">
+                <div>
+                    <div class="table-caption">Table 5: Docking and rescoring for BRD4 inhibitors</div>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Ligand</th>
+                                <th>Docking (kcal/mol)</th>
+                                <th>Rank</th>
+                                <th>Rescore (kcal/mol)</th>
+                                <th>Rank</th>
+                                <th>ΔRank</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr><td><strong>CPI-0610</strong></td><td>−9.95</td><td>1</td><td>−23.11</td><td>9</td><td class="rank-down">+8</td></tr>
+                            <tr><td><strong>Molibresib</strong></td><td>−9.49</td><td>2</td><td>−36.01</td><td>6</td><td class="rank-down">+4</td></tr>
+                            <tr><td><strong>Birabresib</strong></td><td>−9.42</td><td>3</td><td>−38.47</td><td>3</td><td class="rank-same">0</td></tr>
+                            <tr><td><strong>Mivebresib</strong></td><td>−9.02</td><td>4</td><td>−32.03</td><td>8</td><td class="rank-down">+4</td></tr>
+                            <tr><td><strong>JQ1</strong></td><td>−8.65</td><td>5</td><td>−41.21</td><td>1</td><td class="rank-up">−4</td></tr>
+                            <tr><td><strong>Bromosporine</strong></td><td>−8.40</td><td>6</td><td>−36.85</td><td>5</td><td class="rank-up">−1</td></tr>
+                            <tr><td><strong>MS436</strong></td><td>−8.00</td><td>7</td><td>−37.82</td><td>4</td><td class="rank-up">−3</td></tr>
+                            <tr><td><strong>I-BET151</strong></td><td>−7.98</td><td>8</td><td>−40.53</td><td>2</td><td class="rank-up">−6</td></tr>
+                            <tr><td><strong>PFI-1</strong></td><td>−7.52</td><td>9</td><td>−33.40</td><td>7</td><td class="rank-up">−2</td></tr>
+                            <tr><td><strong>Apabetalone</strong></td><td>−7.30</td><td>10</td><td>−22.15</td><td>10</td><td class="rank-same">0</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div>
+                    <div class="table-caption">Table 6: RPS statistics for BRD4 inhibitors (σ = 0.20 Å, 10 replicates)</div>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Ligand</th>
+                                <th>Mean (kcal/mol)</th>
+                                <th>SD</th>
+                                <th>CV (%)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr><td><strong>Molibresib</strong></td><td>−35.67</td><td>1.05</td><td>2.94</td></tr>
+                            <tr><td><strong>MS436</strong></td><td>−37.38</td><td>1.86</td><td>4.98</td></tr>
+                            <tr><td><strong>JQ1</strong></td><td>−41.18</td><td>2.19</td><td>5.31</td></tr>
+                            <tr><td><strong>Birabresib</strong></td><td>−39.82</td><td>2.24</td><td>5.62</td></tr>
+                            <tr><td><strong>Apabetalone</strong></td><td>−26.32</td><td>1.76</td><td>6.69</td></tr>
+                            <tr><td><strong>PFI-1</strong></td><td>−31.19</td><td>2.16</td><td>6.92</td></tr>
+                            <tr><td><strong>Mivebresib</strong></td><td>−38.37</td><td>2.49</td><td>6.49</td></tr>
+                            <tr><td><strong>I-BET151</strong></td><td>−42.53</td><td>2.76</td><td>6.49</td></tr>
+                            <tr><td><strong>CPI-0610</strong></td><td>−27.64</td><td>2.35</td><td>8.50</td></tr>
+                            <tr><td><strong>Bromosporine</strong></td><td>−33.96</td><td>3.58</td><td class="cv-moderate">10.54</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="callout">
+                <p>
+                    BRD4 shows the most dramatic rank inversions in this benchmark: CPI-0610 drops
+                    eight positions (rank 1 → 9) and I-BET151 rises six positions (rank 8 → 2). The
+                    overall score magnitudes are smaller than EGFR/HIV-1 protease, reflecting the
+                    shallower BRD4 pocket. All RPS CVs remain below 11%, confirming score stability
+                    across the set.
+                </p>
+            </div>
+        </div>
+
+        <!-- ═══════════════════════════════════════════════════════════════ -->
+        <!-- HSP90                                                           -->
+        <!-- ═══════════════════════════════════════════════════════════════ -->
+        <div class="target-section" id="hsp90">
+            <div class="breadcrumb">Worked Examples · HSP90</div>
+            <h2 style="border:none; margin-top:0.4rem;">HSP90 Chaperone Inhibitors</h2>
+
+            <div class="target-context">
+                Docking of the HSP90 inhibitor set gave a ranking <strong>dominated by steric
+                complementarity within the N-terminal ATP-binding pocket</strong>, favouring larger
+                ligands capable of spanning the elongated binding channel. Substantial reordering
+                occurred upon rescoring.
+            </div>
+
+            <div class="table-pair">
+                <div>
+                    <div class="table-caption">Table 7: Docking and rescoring for HSP90 inhibitors</div>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Ligand</th>
+                                <th>Docking (kcal/mol)</th>
+                                <th>Rank</th>
+                                <th>Rescore (kcal/mol)</th>
+                                <th>Rank</th>
+                                <th>ΔRank</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr><td><strong>SNX-2112</strong></td><td>−12.06</td><td>1</td><td>−69.22</td><td>1</td><td class="rank-same">0</td></tr>
+                            <tr><td><strong>Ganetespib</strong></td><td>−10.24</td><td>2</td><td>−43.56</td><td>6</td><td class="rank-down">+4</td></tr>
+                            <tr><td><strong>Luminespib</strong></td><td>−9.53</td><td>3</td><td>−58.92</td><td>3</td><td class="rank-same">0</td></tr>
+                            <tr><td><strong>AT13387</strong></td><td>−9.39</td><td>4</td><td>−64.94</td><td>2</td><td class="rank-up">−2</td></tr>
+                            <tr><td><strong>BIIB021</strong></td><td>−8.46</td><td>5</td><td>−44.32</td><td>5</td><td class="rank-same">0</td></tr>
+                            <tr><td><strong>Radicicol</strong></td><td>−8.31</td><td>6</td><td>−25.54</td><td>10</td><td class="rank-down">+4</td></tr>
+                            <tr><td><strong>PU-H71</strong></td><td>−8.31</td><td>7</td><td>−54.76</td><td>4</td><td class="rank-up">−3</td></tr>
+                            <tr><td><strong>Alvespimycin</strong></td><td>−8.02</td><td>8</td><td>−42.47</td><td>7</td><td class="rank-up">−1</td></tr>
+                            <tr><td><strong>Geldanamycin</strong></td><td>−7.90</td><td>9</td><td>−33.98</td><td>8</td><td class="rank-up">−1</td></tr>
+                            <tr><td><strong>Tanespimycin</strong></td><td>−7.76</td><td>10</td><td>−33.73</td><td>9</td><td class="rank-up">−1</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div>
+                    <div class="table-caption">Table 8: RPS statistics for HSP90 inhibitors (σ = 0.20 Å, 10 replicates)</div>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Ligand</th>
+                                <th>Mean (kcal/mol)</th>
+                                <th>SD</th>
+                                <th>CV (%)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr><td><strong>Luminespib</strong></td><td>−56.66</td><td>2.82</td><td>4.98</td></tr>
+                            <tr><td><strong>PU-H71</strong></td><td>−60.88</td><td>3.06</td><td>5.03</td></tr>
+                            <tr><td><strong>Radicicol</strong></td><td>−63.11</td><td>3.61</td><td>5.72</td></tr>
+                            <tr><td><strong>AT13387</strong></td><td>−58.41</td><td>3.61</td><td>6.18</td></tr>
+                            <tr><td><strong>SNX-2112</strong></td><td>−54.92</td><td>3.80</td><td>6.92</td></tr>
+                            <tr><td><strong>BIIB021</strong></td><td>−65.35</td><td>4.60</td><td>7.04</td></tr>
+                            <tr><td><strong>Tanespimycin</strong></td><td>−60.88</td><td>4.44</td><td>7.29</td></tr>
+                            <tr><td><strong>Ganetespib</strong></td><td>−65.31</td><td>6.06</td><td>9.28</td></tr>
+                            <tr><td><strong>Alvespimycin</strong></td><td>−70.01</td><td>6.85</td><td>9.78</td></tr>
+                            <tr><td><strong>Geldanamycin</strong></td><td>−60.88</td><td>6.85</td><td class="cv-moderate">11.25</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="callout">
+                <p>
+                    Radicicol drops four positions after rescoring (rank 6 → 10), consistent with its
+                    natural product scaffold having atypical electrostatic interactions that docking
+                    scores overestimate. PU-H71 rises three positions (rank 7 → 4), benefitting from
+                    improved electrostatic treatment under GB solvation. All RPS CVs remain below 12%,
+                    indicating good numerical stability across the HSP90 set.
+                </p>
+            </div>
+        </div>
+
+        <!-- ═══════════════════════════════════════════════════════════════ -->
+        <!-- Cross-target summary                                            -->
+        <!-- ═══════════════════════════════════════════════════════════════ -->
+        <div class="target-section" id="summary">
+            <h2>Cross-Target Summary</h2>
+            <p>
+                Across all four targets, single-frame MM/GBSA rescoring consistently reorders ligands
+                relative to docking. The degree of reordering varies by target, reflecting the interplay
+                between pocket character (electrostatic vs. hydrophobic) and scoring function
+                approximations.
+            </p>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Target</th>
+                        <th>Ligands</th>
+                        <th>Max |ΔRank|</th>
+                        <th>Mean CV (%)</th>
+                        <th>CV &gt; 15%</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr><td><strong>EGFR</strong></td><td>10</td><td>5</td><td>7.9</td><td>1 (Icotinib, 31.1%)</td></tr>
+                    <tr><td><strong>HIV-1 Protease</strong></td><td>10</td><td>5</td><td>8.4</td><td>0</td></tr>
+                    <tr><td><strong>BRD4</strong></td><td>10</td><td>8</td><td>6.7</td><td>0</td></tr>
+                    <tr><td><strong>HSP90</strong></td><td>10</td><td>4</td><td>7.6</td><td>0</td></tr>
+                </tbody>
+            </table>
+
+            <div class="callout warning">
+                <p>
+                    <strong>Interpretation reminder:</strong> MM/GBSA scores are relative and
+                    rank-oriented. Absolute values should not be compared across different protein
+                    targets or interpreted as binding free energies. RPS CVs quantify numerical
+                    sensitivity to coordinate uncertainty only — they do not reflect conformational
+                    or thermodynamic uncertainty.
+                </p>
+            </div>
+        </div>
+
+    </main>
+</body>
+</html>

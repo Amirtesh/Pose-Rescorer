@@ -5,6 +5,7 @@ src/rescore/batch.py
 src/rescore/cli.py
 src/rescore/config.py
 src/rescore/plotting.py
+src/rescore/rps.py
 src/rescore.egg-info/PKG-INFO
 src/rescore.egg-info/SOURCES.txt
 src/rescore.egg-info/dependency_links.txt
