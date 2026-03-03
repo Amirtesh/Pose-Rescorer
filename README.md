@@ -524,7 +524,7 @@ pytest tests/test_validation.py
 
 ## 📄 License
 
-This project uses AmberTools, which is distributed under GNU GPL v3.
+Distributed under the MIT License. See LICENSE for more information.
 
 ---
 
