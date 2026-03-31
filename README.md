@@ -4,6 +4,8 @@
 
 A streamlined Python package for **post-docking, single-frame rescoring** of protein-ligand complexes using **AmberTools MMPBSA.py** (MM/GBSA with optional PBSA).
 
+For full details, see the [documentation](https://amirtesh.github.io/Pose-Rescorer/).
+
 ## 🎯 Scientific Positioning
 
 **This tool is designed for POST-DOCKING RESCORING and RELATIVE RANKING only:**
